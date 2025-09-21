@@ -1,0 +1,73 @@
+# -----------------------------
+# Dockerfile.prod - Django + GIS
+# Alpine + Python 3.12
+# -----------------------------
+
+# Build-time arguments for UID/GID (host user)
+ARG UID=1000
+ARG GID=1000
+
+# Base image
+FROM python:3.12.5-alpine3.20
+
+# -----------------------------
+# Environment variables
+# -----------------------------
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV GDAL_DATA=/usr/share/gdal
+ENV GEOS_LIBRARY_PATH=/usr/lib/libgeos_c.so
+ENV GDAL_LIBRARY_PATH=/usr/lib/libgdal.so
+
+# -----------------------------
+# Create non-root user & group
+# -----------------------------
+RUN addgroup -g ${GID} appgroup || addgroup appgroup \
+ && adduser -D -u ${UID} -G appgroup appuser || adduser -D -G appgroup appuser
+
+# -----------------------------
+# Install system dependencies
+# -----------------------------
+RUN apk update && apk add --no-cache \
+    # PostgreSQL & PostGIS dev
+    postgresql-dev postgresql-client \
+    # GIS libraries
+    gdal gdal-dev geos geos-dev gdal-tools \
+    # Image libraries
+    jpeg-dev zlib-dev freetype-dev lcms2-dev openjpeg-dev tiff-dev libpng-dev \
+    # Build tools
+    gcc g++ python3-dev musl-dev linux-headers \
+    # Utilities
+    curl binutils \
+    # SQLite
+    sqlite sqlite-dev \
+    # XML processing
+    libxml2-dev libxslt-dev
+
+# -----------------------------
+# Set working directory
+# -----------------------------
+WORKDIR /app
+
+# -----------------------------
+# Install Python dependencies
+# -----------------------------
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir -r requirements.txt
+
+# -----------------------------
+# Copy project files and set ownership
+# -----------------------------
+COPY . /app/
+RUN chown -R appuser:appgroup /app \
+ && chmod +x /app/startup.sh
+# -----------------------------
+# Switch to non-root user
+# -----------------------------
+USER appuser
+
+# -----------------------------
+# Expose port and run app
+# -----------------------------
+EXPOSE 8000
+CMD ["gunicorn", "--config", "config/gunicorn_config.py", "config.wsgi:application"]

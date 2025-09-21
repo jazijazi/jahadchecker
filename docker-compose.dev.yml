@@ -1,0 +1,138 @@
+services:
+  # db:
+  #   image: postgis/postgis:16-3.5-alpine
+  #   container_name: zarrin_postgis_db
+  #   environment:
+  #     POSTGRES_DB: ${POSTGRES_DB}
+  #     POSTGRES_USER: ${POSTGRES_USER}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #   env_file:
+  #     - .env
+  #   networks:
+  #     - zarrinnet
+  #   ports:
+  #     - ${POSTGRES_PORT}:5432
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 30s
+  #   restart: unless-stopped
+  #   # shm_size: 256mb
+  db:
+    build:
+      context: ./postgredb
+      dockerfile: ./Dockerfile
+    container_name: jahad_postgis_db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Add the SECRET_KEY as PostgreSQL configuration
+      PGOPTIONS: "-c app.jwt_secret=${SECRET_KEY}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    env_file:
+      - .env
+    networks:
+      - jahadnet
+    ports:
+      - ${POSTGRES_PORT}:5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.0.1-alpine
+    container_name: zarrin_redis
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redis_data:/data
+    env_file:
+      - .env
+    networks:
+      - jahadnet
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    command: >
+      redis-server 
+      --appendonly yes 
+      --appendfsync everysec
+      --maxmemory-policy allkeys-lru
+
+  redisinsight:
+    image: redislabs/redisinsight:latest
+    container_name: zarrin_redisinsight
+    ports:
+      - "8001:5540"          # Expose the RedisInsight UI
+    networks:
+      - jahadnet
+    restart: unless-stopped
+    volumes:
+      - redisinsight:/data
+
+  geoserver:
+    image: kartoza/geoserver:2.27.0
+    container_name: geoserver
+    # restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
+      GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
+      GEOSERVER_DATA_DIR: /opt/geoserver/data_dir
+    volumes:
+      - ./geoserver_data:/opt/geoserver/data_dir  # <- persistent on host
+    networks:
+      - jahadnet
+    depends_on:
+      - db
+
+  # web:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: ./Dockerfile.dev
+  #   container_name: zarrin_django_web
+  #   user: "${UID}:${GID}"
+  #   command: python backend/manage.py runserver 0.0.0.0:8000
+  #   volumes:
+  #     # - ./backend:/code
+  #     - .:/code
+  #     - ./.git:/code/.git:ro
+  #   ports:
+  #     - "8000:8000"
+  #   env_file:
+  #     - .env
+  #   networks:
+  #     - zarrinnet
+  #   depends_on:
+  #     - db
+  #     - redis
+
+
+networks:
+  jahadnet:
+    name: jahadnet
+    driver: bridge
+
+volumes:
+  pgdata:
+    driver: local
+  redis_data:
+    driver: local
+  redisinsight:
+    driver: local
+

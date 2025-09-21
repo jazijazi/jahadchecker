@@ -1,0 +1,35 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# IDE/Editor files and directories
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Version control
+.git/
+.gitignore
+
+# Environment files
+.env
+.env.*
+
+# Database files
+db.sqlite3
+
+# Log files and other temporary files
+*.log
+*/logs/
+tmp/
+*.tmp
+
+madia/
+staticfiles/
