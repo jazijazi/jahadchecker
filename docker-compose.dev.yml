@@ -51,7 +51,7 @@ services:
 
   redis:
     image: redis:8.0.1-alpine
-    container_name: zarrin_redis
+    container_name: jahad_redis
     ports:
       - "${REDIS_PORT}:6379"
     volumes:
@@ -75,7 +75,7 @@ services:
 
   redisinsight:
     image: redislabs/redisinsight:latest
-    container_name: zarrin_redisinsight
+    container_name: jahad_redisinsight
     ports:
       - "8001:5540"          # Expose the RedisInsight UI
     networks:

@@ -34,14 +34,16 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.gis',
+    'leaflet',
 
     'common',
     'captcha',
 
     'accounts',
+    'geoserverapp',
+    'landreg',
 
     'drf_spectacular',
-    'leaflet',
 ]
 
 MIDDLEWARE = [

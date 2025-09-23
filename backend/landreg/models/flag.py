@@ -1,0 +1,79 @@
+from django.utils import timezone
+from django.db import models
+from django.contrib.gis.db import models as gis_models
+from django.core.validators import RegexValidator
+from django.core.exceptions import ValidationError
+
+from common.models import CustomModel
+from accounts.models import User
+
+
+class Flag(CustomModel):
+    FLAG_STATUS_CHOICES = [
+        (1, 'بدون تغییر'),
+        (2, 'دارای تغییر جزئی'),
+        (3, 'تفکیک شده'),
+        (4, 'کاملاً غیرهمخوان'),
+    ]
+    
+    border = gis_models.PointField(
+        srid=4326,
+        blank=False,
+        null=False,
+        verbose_name="موقعیت نقطه",
+        help_text="موقعیت جغرافیایی نقطه فلگ"
+    )
+    
+    createdby = models.ForeignKey(
+        User,
+        verbose_name="ایجاد شده توسط",
+        on_delete=models.SET_NULL,
+        related_name="created_flags",
+        blank=True,
+        null=True
+    )
+    
+    description = models.TextField(
+        verbose_name="توضیحات",
+        max_length=512,
+        blank=True,
+        null=True,
+        help_text="توضیحات اضافی در مورد فلگ"
+    )
+    
+    cadaster = models.ForeignKey(
+        'landreg.Cadaster',
+        verbose_name="کاداستر",
+        on_delete=models.CASCADE,
+        related_name="flags",
+        blank=False,
+        null=False
+    )
+    
+    status = models.IntegerField(
+        verbose_name="وضعیت",
+        choices=FLAG_STATUS_CHOICES,
+        blank=False,
+        null=False,
+        default=1,
+        help_text="وضعیت فعلی فلگ"
+    )
+
+    def __str__(self):
+        status_label = dict(self.FLAG_STATUS_CHOICES).get(self.status, 'نامشخص')
+        return f"فلگ {self.id} - {status_label}"
+
+    def get_status_display_persian(self):
+        """Get Persian display name for status"""
+        return dict(self.FLAG_STATUS_CHOICES).get(self.status, 'نامشخص')
+
+    class Meta:
+        verbose_name = "فلگ"
+        verbose_name_plural = "فلگ‌ها"
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['cadaster']),
+            models.Index(fields=['createdby']),
+            models.Index(fields=['created_at', 'status']),
+        ]
+        ordering = ['-created_at']  # Most recent first

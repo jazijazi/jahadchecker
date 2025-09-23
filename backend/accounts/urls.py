@@ -5,9 +5,8 @@ from accounts.views.views import (
     LogoutUser,
     Register,
     UserProfile,
-    UserContracts,
-    NotificationListApiViews,
-    NotificationDetailsApiViews,
+    # NotificationListApiViews,
+    # NotificationDetailsApiViews,
 )
 
 from accounts.views.userpermsviews import (
@@ -19,10 +18,10 @@ from accounts.views.userpermsviews import (
     RolesDetailApiViews
 )
 
-from accounts.views.usermanagemetviews import (
-    UserManagementListApiView,
-    UserManagementDetailsApiView,
-)
+# from accounts.views.usermanagemetviews import (
+#     UserManagementListApiView,
+#     UserManagementDetailsApiView,
+# )
 
 from django.conf import settings
 from django.conf.urls.static import static
