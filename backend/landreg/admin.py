@@ -1,10 +1,16 @@
 
-from django.contrib import admin
+from django.contrib import admin, messages
 from leaflet.admin import LeafletGeoAdmin
 
 from .models import Pelak
-from .models.cadaster import IrrigationTypDomain , LandUseDomain , Cadaster
+from .models.cadaster import (
+    IrrigationTypDomain ,
+    LandUseDomain ,
+    Cadaster ,
+    OldCadasterData
+)
 from .models.flag import Flag
+from landreg.services.gis import drop_table_if_exists
 
 
 class PelakAdmin(LeafletGeoAdmin):
@@ -123,12 +129,64 @@ class FlagAdmin(LeafletGeoAdmin):
         }),
     )
 
+class OldCadasterDataAdmin(admin.ModelAdmin):
+    list_display = [
+        "id", "table_name", "province", "status",
+        "created_by", "matched_by",
+    ]
+    list_filter = ["status",]
+    search_fields = ["table_name", "province__name", "created_by__username", "matched_by__username"]
+    autocomplete_fields = ["province", "created_by", "matched_by"]
+
+    fieldsets = (
+        ("اطلاعات اصلی", {
+            "fields": ("table_name", "province", "status")
+        }),
+        ("ایجاد", {
+            "fields": ("created_by",)
+        }),
+        ("مچ شدن", {
+            "fields": ("matched_by", "matched_at")
+        }),
+    )
+
+    actions = ["drop_selected_tables"]
+
+    def drop_selected_tables(self, request, queryset):
+        """
+        Custom admin action: drop DB tables for selected cadaster records
+        """
+        success_tables = []
+        failed_tables = []
+
+        for obj in queryset:
+            if drop_table_if_exists(obj.table_name):
+                success_tables.append(obj.table_name)
+            else:
+                failed_tables.append(obj.table_name)
+
+        if success_tables:
+            self.message_user(
+                request,
+                f"Tables dropped successfully: {', '.join(success_tables)}",
+                level=messages.SUCCESS
+            )
+
+        if failed_tables:
+            self.message_user(
+                request,
+                f"Failed to drop tables: {', '.join(failed_tables)}",
+                level=messages.ERROR
+            )
+    drop_selected_tables.short_description = "Drop database tables for selected records"
+
 admin.site.register(LandUseDomain , LandUseDomainAdmin)
 admin.site.register(IrrigationTypDomain , IrrigationTypDomainAdmin)
 
 admin.site.register(Pelak , PelakAdmin)
 admin.site.register(Cadaster , CadasterAdmin)
 admin.site.register(Flag , FlagAdmin)
+admin.site.register(OldCadasterData , OldCadasterDataAdmin)
 
 
 

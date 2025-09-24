@@ -150,11 +150,7 @@ class PelakListApiViews(APIView):
                 )
         
         except Exception as e:
-            # Log the actual error for debugging
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error creating pelak: {str(e)}", exc_info=True)
-            
+            print(f"Error creating pelak: {str(e)}")
             return Response(
                 {"detail": "خطا در ساخت پلاک جدید"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

@@ -237,4 +237,123 @@ class Cadaster(CustomModel):
         ]
 
 
+class OldCadasterData(CustomModel):
+    # Use TextChoices for better type safety and IDE support
+    class Status(models.TextChoices):
+        NOT_MATCHED = '1', 'مچ نشده'
+        MATCHED = '2', 'مچ شده'
+    
+    table_name = models.CharField(
+        verbose_name="نام جدول در دیتابیس",
+        max_length=100,
+        blank=False,
+        null=False,
+        db_index=True,
+        help_text="نام جدول مربوطه در دیتابیس"
+    )
+    
+    created_by = models.ForeignKey(
+        User,
+        verbose_name="ایجاد شده توسط",
+        on_delete=models.SET_NULL,
+        related_name="created_old_cadaster_data", 
+        blank=True,
+        null=True
+    )
+    
+    status = models.CharField(
+        verbose_name="وضعیت",
+        max_length=1,
+        choices=Status.choices,
+        default=Status.NOT_MATCHED,
+        blank=False,
+        null=False,
+        db_index=True
+    )
+    
+    matched_by = models.ForeignKey( 
+        User,
+        verbose_name="مچ شده توسط",
+        on_delete=models.SET_NULL,
+        related_name="matched_old_cadaster_data",
+        blank=True,
+        null=True
+    )
+    
+    matched_at = models.DateTimeField(
+        verbose_name="تاریخ مچ شدن",
+        blank=True,
+        null=True,
+        db_index=True
+    )
+    
+    province = models.ForeignKey(
+        Province,
+        on_delete=models.CASCADE,
+        related_name="old_cadaster_data",
+        verbose_name="استان مربوطه",
+        blank=False,
+        null=False,
+        db_index=True
+    )
+
+    @property
+    def is_matched(self):
+        return self.status == self.Status.MATCHED
+    
+    class Meta:
+        verbose_name = "داده کادستر قدیمی"
+        verbose_name_plural = "داده‌های کادستر قدیمی"
+        # Add composite indexes for common query patterns
+        indexes = [
+            models.Index(fields=['status', 'province']),
+            models.Index(fields=['matched_at', 'status']),
+        ]
+        # Add constraints
+        constraints = [
+            # Ensure matched_by and matched_at are both set or both null
+            models.CheckConstraint(
+                check=(
+                    models.Q(matched_by__isnull=True, matched_at__isnull=True) |
+                    models.Q(matched_by__isnull=False, matched_at__isnull=False)
+                ),
+                name='matched_fields_consistency'
+            ),
+        ]
+    
+    def __str__(self):
+        return f"{self.table_name}"
+    
+    def clean(self):
+        """Custom validation"""
+        from django.core.exceptions import ValidationError
+        
+        if self.status == self.Status.MATCHED:
+            if not self.matched_by or not self.matched_at:
+                raise ValidationError(
+                    'برای وضعیت "مچ شده"، فیلدهای "مچ شده توسط" و "تاریخ مچ شدن" باید پر باشند.'
+                )
+        elif self.status == self.Status.NOT_MATCHED:
+            if self.matched_by or self.matched_at:
+                raise ValidationError(
+                    'برای وضعیت "مچ نشده"، فیلدهای "مچ شده توسط" و "تاریخ مچ شدن" باید خالی باشند.'
+                )
+    
+    def save(self, *args, **kwargs):
+        # Auto-set matched_at when status changes to MATCHED
+        if self.status == self.Status.MATCHED and not self.matched_at:
+            from django.utils import timezone
+            self.matched_at = timezone.now()
+        
+        # Clear matched fields when status is NOT_MATCHED
+        elif self.status == self.Status.NOT_MATCHED:
+            self.matched_by = None
+            self.matched_at = None
+        
+        self.full_clean()  # Run validation
+        super().save(*args, **kwargs)
+    
+
+
+
 
