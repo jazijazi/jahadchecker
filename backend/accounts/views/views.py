@@ -308,9 +308,14 @@ class UserProfile(APIView):
                 fields = ['id' , 'apis' , 'tools' , 'title' , 'desc']
 
         class UserProfileOutputSerializerCompany(serializers.ModelSerializer):
+            class UserProfileOutputSerializerCompanyProvinces(serializers.ModelSerializer):
+                class Meta:
+                    model = Province
+                    fields = ['id','name_fa']
+            provinces = UserProfileOutputSerializerCompanyProvinces(many=True)
             class Meta:
                 model = Company
-                fields = ['id','name','typ','service_typ','code']
+                fields = ['id' , 'name' , 'typ' , 'provinces' , 'is_nazer' , 'is_supernazer' , 'is_moshaver']
         roles = UserProfileOutputSerializerRoles()
         company = UserProfileOutputSerializerCompany()
         class Meta:
@@ -318,8 +323,8 @@ class UserProfile(APIView):
             fields = [
                 "username","first_name","last_name",
                 "first_name_fa","last_name_fa",
-                "address","email","last_login",'is_controller',
-                "is_staff","is_superuser","roles","company",
+                "address","email","last_login",
+                "is_staff","is_superuser","roles","company","pelaks",
             ]
 
     @extend_schema(

@@ -100,6 +100,32 @@ class Roles(models.Model):
         verbose_name = "نام نقش"
         verbose_name_plural = "لیست نقش ها"
 
+
+class UserPelakPermission(models.Model):
+    """
+    Through model for User-Pelak many-to-many relationship
+    """
+    user = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.CASCADE,
+        verbose_name="کاربر"
+    )
+    pelak = models.ForeignKey(
+        'landreg.Pelak',
+        on_delete=models.CASCADE,
+        verbose_name="پلاک"
+    )
+    
+    class Meta:
+        unique_together = ['user', 'pelak']
+        verbose_name = "دسترسی کاربر به پلاک"
+        verbose_name_plural = "دسترسی‌های کاربران به پلاک‌ها"
+        indexes = [
+            models.Index(fields=['user', 'pelak']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.pelak.number}"
 class User(AbstractUser):
     """
     Custom User model.
@@ -144,6 +170,44 @@ class User(AbstractUser):
         verbose_name="شرکت",
         help_text="شرکت مرتبط با این کاربر"
     )
+
+    # Many-to-Many relationship for pelak permissions
+    pelaks = models.ManyToManyField(
+        'landreg.Pelak',
+        through='UserPelakPermission',
+        related_name="authorized_users",
+        verbose_name="پلاک‌های مجاز",
+        blank=True,
+        help_text="پلاک‌هایی که این کاربر به آن‌ها دسترسی دارد"
+    )
+    def has_pelak_access(self, pelak_number: str) -> bool:
+        """Check if user has access to a specific pelak"""
+        # Check if user is superuser - return True immediately
+        if self.is_superuser:
+            return True
+        # Check if user has a company and company is supernazer - return True immediately
+        if self.company and self.company.is_supernazer:
+            return True
+        # For everything else, check specific pelak access
+        return self.pelaks.filter(number=pelak_number).exists()
+    
+    def get_accessible_pelaks(self):
+        """Get all pelaks this user has access to"""
+        from landreg.models.pelak import Pelak
+        if self.is_superuser:
+            return Pelak.objects.all()
+        # Check if user has a company and company is supernazer - return True immediately
+        if self.company and self.company.is_supernazer:
+            return Pelak.objects.all()
+        return self.pelaks.all()
+    
+    def grant_pelak_access(self, pelak):
+        """Grant access to a pelak for this user"""
+        self.pelaks.add(pelak)
+    
+    def revoke_pelak_access(self, pelak):
+        """Revoke access to a pelak for this user"""
+        self.pelaks.remove(pelak)
 
 
     def get_full_name_fa(self):

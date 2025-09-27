@@ -1,154 +1,171 @@
-# from datetime import datetime, timedelta, UTC
-# from django.db import transaction
-# from rest_framework import serializers
-# from rest_framework.views import APIView
-# from rest_framework import exceptions , status
-# from django.contrib.auth.hashers import make_password
-# from django.contrib.auth.password_validation import validate_password
-# from django.core.exceptions import ValidationError as DjangoValidationError
-# from rest_framework.response import Response
-# from rest_framework.request import Request
-# from rest_framework.permissions import (
-#     IsAuthenticated,
-#     IsAdminUser,
-# )
-# from common.pagination import CustomPagination
-# from common.models import Company
-# from accounts.models import (
-#     User,
-#     Apis,
-#     Tools,
-#     Roles,
-# )
-# from django.conf import settings
-# from drf_spectacular.utils import extend_schema
-# from drf_spectacular.types import OpenApiTypes
+from datetime import datetime, timedelta, UTC
+from django.db import transaction
+from rest_framework import serializers
+from rest_framework.views import APIView
+from rest_framework import exceptions , status
+from django.contrib.auth.hashers import make_password
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework.response import Response
+from rest_framework.request import Request
+from rest_framework.permissions import (
+    IsAuthenticated,
+    IsAdminUser,
+)
+from common.pagination import CustomPagination
+from common.models import Company,Province
+from accounts.models import (
+    User,
+    Apis,
+    Tools,
+    Roles,
+)
+from django.conf import settings
+from drf_spectacular.utils import extend_schema
+from drf_spectacular.types import OpenApiTypes
 
-# class UserManagementListApiView(APIView):
-#     """
-#         GET: Return List of All Users
-#         POST: Create a New User
-#     """
-#     permission_classes = [IsAdminUser]
+class UserManagementListApiView(APIView):
+    """
+        GET: Return List of All Users
+        POST: Create a New User
+    """
+    permission_classes = [IsAdminUser]
 
-#     class UserManagementListOutputSerializer(serializers.ModelSerializer):
-#         class UserManagementListOutputRoles(serializers.ModelSerializer):
-#             class Meta:
-#                 model = Roles
-#                 fields = ['id','title']
-#         class UserManagementListOutputCompany(serializers.ModelSerializer):
-#             class Meta:
-#                 model = Company
-#                 fields = ['id','name','typ','service_typ','code']
-#         roles = UserManagementListOutputRoles()
-#         company = UserManagementListOutputCompany()
-#         class Meta:
-#             model = User
-#             fields = ['id','username','first_name_fa','last_name_fa','address',
-#                       'first_name','last_name','email','is_staff','is_active','is_controller',
-#                       'date_joined','last_login','is_active','roles','company']
+    class UserManagementListOutputSerializer(serializers.ModelSerializer):
+        class UserManagementListOutputRoles(serializers.ModelSerializer):
+            class Meta:
+                model = Roles
+                fields = ['id','title']
+        class UserManagementListOutputCompany(serializers.ModelSerializer):
+            class UserManagementListOutputCompanyProvinces(serializers.ModelSerializer):
+                class Meta:
+                    model = Province
+                    fields = ['id','name_fa']
+            provinces = UserManagementListOutputCompanyProvinces(many=True)
+            class Meta:
+                model = Company
+                fields = ['id' , 'name' , 'typ' , 'provinces' , 'is_nazer' , 'is_supernazer' , 'is_moshaver']
+        roles = UserManagementListOutputRoles()
+        company = UserManagementListOutputCompany()
+        class Meta:
+            model = User
+            fields = ['id','username','first_name_fa','last_name_fa','address',
+                      'first_name','last_name','email','is_staff','is_active',
+                      'date_joined','last_login','is_active','roles','company','pelaks']
             
-#     class UserManagementListInputSerializer(serializers.ModelSerializer):
-#         password = serializers.CharField(write_only=True, min_length=8)
-#         confirm_password = serializers.CharField(write_only=True)
-#         accessible_shrh_layers = serializers.ListField(
-#             child=serializers.IntegerField(),
-#             required=False,
-#             allow_empty=True,
-#         )
+    class UserManagementListInputSerializer(serializers.ModelSerializer):
+        password = serializers.CharField(write_only=True, min_length=8)
+        confirm_password = serializers.CharField(write_only=True)
+        accessible_pelaks = serializers.ListField(
+            child=serializers.CharField(max_length=100),
+            required=False,
+            allow_empty=True,
+        )
 
-#         def validate_accessible_shrh_layers(self, value):
-#             """
-#             Validate that all provided ShrhLayer IDs exist
-#             """
-#             if value:
-#                 from contracts.models.SharhKhadamats import ShrhLayer
-#                 existing_ids = ShrhLayer.objects.filter(id__in=value).values_list('id', flat=True)
-#                 invalid_ids = set(value) - set(existing_ids)
-                
-#                 if invalid_ids:
-#                     raise serializers.ValidationError(
-#                         f"لایه‌های با شناسه‌های {list(invalid_ids)} یافت نشدند"
-#                     )
-#             return value
+        def validate_password(self, password):
+            """
+            Validate password using Django's password validators from settings
+            """
+            try:
+                # This will use your CustomPasswordValidator from settings
+                validate_password(password)
+            except DjangoValidationError as e:
+                # Convert Django validation errors to DRF format
+                raise serializers.ValidationError(e.messages)
+            return password
+        def validate(self, attrs):
+            """
+            Validate that password and confirm_password match
+            """
+            password = attrs.get('password')
+            confirm_password = attrs.get('confirm_password')
+            
+            if password != confirm_password:
+                raise serializers.ValidationError({
+                    'confirm_password': 'رمز عبور و تکرار آن باید یکسان باشند'
+                })
+            
+            # Remove confirm_password from validated data as it's not needed for saving
+            attrs.pop('confirm_password', None)
+            return attrs
+        def validate_accessible_pelaks(self, pelak_numbers):
+            """
+            Validate that all provided pelak numbers exist
+            """
+            if not pelak_numbers:
+                return pelak_numbers
+            from landreg.models.pelak import Pelak
+            existing_pelaks = Pelak.objects.filter(number__in=pelak_numbers)
+            existing_numbers = set(existing_pelaks.values_list('number', flat=True))
+            provided_numbers = set(pelak_numbers)
+            
+            missing_numbers = provided_numbers - existing_numbers
+            if missing_numbers:
+                raise serializers.ValidationError(
+                    f"پلاک‌های زیر وجود ندارند: {', '.join(missing_numbers)}"
+                )
+            
+            return pelak_numbers
+        def create(self, validated_data):
+            """
+            Create user with hashed password
+            """
+            accessible_pelaks = validated_data.pop('accessible_pelaks', [])
 
-#         def validate_password(self, password):
-#             """
-#             Validate password using Django's password validators from settings
-#             """
-#             try:
-#                 # This will use your CustomPasswordValidator from settings
-#                 validate_password(password)
-#             except DjangoValidationError as e:
-#                 # Convert Django validation errors to DRF format
-#                 raise serializers.ValidationError(e.messages)
-#             return password
-#         def validate(self, attrs):
-#             """
-#             Validate that password and confirm_password match
-#             """
-#             password = attrs.get('password')
-#             confirm_password = attrs.get('confirm_password')
+            # Hash the password before saving
+            password = validated_data.get('password')
+            if password:
+                validated_data['password'] = make_password(password)
             
-#             if password != confirm_password:
-#                 raise serializers.ValidationError({
-#                     'confirm_password': 'رمز عبور و تکرار آن باید یکسان باشند'
-#                 })
+            # Create the user
+            user = super().create(validated_data)
+
+            from landreg.models.pelak import Pelak
+            # Assign pelaks if provided
+            if accessible_pelaks:
+                pelaks = Pelak.objects.filter(number__in=accessible_pelaks)
+                user.pelaks.set(pelaks)  # This will create UserPelakPermission records
             
-#             # Remove confirm_password from validated data as it's not needed for saving
-#             attrs.pop('confirm_password', None)
-#             return attrs
-#         def create(self, validated_data):
-#             """
-#             Create user with hashed password
-#             """
-#             # Hash the password before saving
-#             password = validated_data.get('password')
-#             if password:
-#                 validated_data['password'] = make_password(password)
-            
-#             return super().create(validated_data)
-#         class Meta:
-#             model = User
-#             fields = ['username','first_name_fa','last_name_fa','address','accessible_shrh_layers','is_controller'
-#                       'first_name','last_name','email','roles','password','confirm_password','company']
+            return user
+        class Meta:
+            model = User
+            fields = ['username','first_name_fa','last_name_fa','address','accessible_pelaks',
+                      'first_name','last_name','email','roles','password','confirm_password','company']
     
             
 
-#     def get(self, request: Request) -> Response:
-#         try:
-#             all_users = User.objects.all()
-#             paginator = CustomPagination()
-#             paginated_queryset = paginator.paginate_queryset(all_users, request)
-#             serializer = self.UserManagementListOutputSerializer(paginated_queryset , many=True)
-#             return paginator.get_paginated_response(serializer.data)
-#         except Exception as e:                      
-#             print(f"Error in UserManagementListApiView: {e}")
-#             return Response(
-#                 {"detail": "خطا در خواندن لیست کاربر ها"}, 
-#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-#             )
+    def get(self, request: Request) -> Response:
+        try:
+            all_users = User.objects.all()
+            paginator = CustomPagination()
+            paginated_queryset = paginator.paginate_queryset(all_users, request)
+            serializer = self.UserManagementListOutputSerializer(paginated_queryset , many=True)
+            return paginator.get_paginated_response(serializer.data)
+        except Exception as e:                      
+            print(f"Error in UserManagementListApiView: {e}")
+            return Response(
+                {"detail": "خطا در خواندن لیست کاربر ها"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
-#     def post(self, request:Request) -> Response:
-#         try:
-#             serializer = self.UserManagementListInputSerializer(data=request.data)
-#             if not serializer.is_valid():
-#                 return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
+    def post(self, request:Request) -> Response:
+        try:
+            serializer = self.UserManagementListInputSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
 
-#             user = serializer.save()
-#             # Delay sync until after current transaction commits
-#             # user.sync_accessible_contracts()
+            user = serializer.save()
             
-#             # Return the created user data using output serializer
-#             output_serializer = self.UserManagementListOutputSerializer(user)
-#             return Response(output_serializer.data,status=status.HTTP_201_CREATED)
+            # Return the created user data using output serializer
+            output_serializer = self.UserManagementListOutputSerializer(user)
+            return Response(output_serializer.data,status=status.HTTP_201_CREATED)
             
-#         except Exception as e:                      
-#             print(f"Error in UserManagementListApiView: {e}")
-#             return Response(
-#                 {"detail": "خطا در ساخت کاربر جدید"}, 
-#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-#             )
+        except Exception as e:                      
+            print(f"Error in UserManagementListApiView: {e}")
+            return Response(
+                {"detail": "خطا در ساخت کاربر جدید"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
 # class UserManagementDetailsApiView(APIView):
 #     """
