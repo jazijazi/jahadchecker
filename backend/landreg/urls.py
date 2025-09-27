@@ -9,6 +9,8 @@ from landreg.views.flagviews import (
 from landreg.views.cadasterviews import (
     UploadOldCadasterApiView,
     OldCadasterDetailsApiView,
+
+    ChangeCadsterStatusApiView
 )
 
 
@@ -21,5 +23,6 @@ urlpatterns = [
     path('uploadoldcadaster/' , UploadOldCadasterApiView.as_view() , name="uoload-oldcadasterdata"),
 
     path('oldcadasterdata/<int:oldcadasterid>/' , OldCadasterDetailsApiView.as_view() , name="oldcadasterdata-details"),
+    path('updatecadasterstatus/<int:cadasterid>/' , ChangeCadsterStatusApiView.as_view() , name="oldcadasterdata-details"),
     
 ]

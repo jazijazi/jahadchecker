@@ -196,6 +196,19 @@ class Cadaster(CustomModel):
         null=False,
         default=5
     )
+    change_status_date = models.DateTimeField(
+        verbose_name="تاریخ تایید نظارت",
+        blank=True,
+        null=True
+    )
+    change_status_by = models.ForeignKey(
+        User,
+        verbose_name="تغییر وضعیت داده شده توسط",
+        on_delete=models.SET_NULL,
+        related_name="ruser_changestatusby",
+        blank=True,
+        null=True
+    )
 
     land_use = models.ForeignKey(
         LandUseDomain,

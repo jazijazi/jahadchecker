@@ -1,4 +1,5 @@
 import zipfile
+from django.utils import timezone
 from typing import cast, Dict, Any , List
 from django.core.validators import FileExtensionValidator
 from rest_framework.response import Response
@@ -232,45 +233,147 @@ class OldCadasterDetailsApiView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             ) 
     
-def delete(self, request: Request, oldcadasterid: int) -> Response:
-    try:
-        user: User = request.user
-        oldcadasterdata_instance = OldCadasterData.objects.select_related(
-            'province', 'created_by', 'matched_by'
-        ).get(pk=oldcadasterid)
+    def delete(self, request: Request, oldcadasterid: int) -> Response:
+        try:
+            user: User = request.user
+            oldcadasterdata_instance = OldCadasterData.objects.select_related(
+                'province', 'created_by', 'matched_by'
+            ).get(pk=oldcadasterid)
 
-        # Check permissions
-        has_permission, error_msg = self._check_user_permissions(user, oldcadasterdata_instance)
-        if not has_permission:
-            return Response({"detail": error_msg}, status=status.HTTP_403_FORBIDDEN)
+            # Check permissions
+            has_permission, error_msg = self._check_user_permissions(user, oldcadasterdata_instance)
+            if not has_permission:
+                return Response({"detail": error_msg}, status=status.HTTP_403_FORBIDDEN)
 
-        # Get table name before deletion for cleanup
-        table_name = oldcadasterdata_instance.table_name
+            # Get table name before deletion for cleanup
+            table_name = oldcadasterdata_instance.table_name
 
-        table_dropped = drop_table_if_exists(table_name)
-        if not table_dropped:
+            table_dropped = drop_table_if_exists(table_name)
+            if not table_dropped:
+                return Response(
+                    {"detail": "خطا در حذف جدول دیتابیس مربوطه"}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+            # Delete the database record
+            oldcadasterdata_instance.delete()
+
             return Response(
-                {"detail": "خطا در حذف جدول دیتابیس مربوطه"}, 
+                {"detail": "دیتای کاداستر قدیمی با موفقیت حذف شد"}, 
+                status=status.HTTP_204_NO_CONTENT
+            )    
+        except OldCadasterData.DoesNotExist:
+            return Response(
+                {"detail": "دیتای کاداستر قدیمی با این آیدی یافت نشد"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            print(f"Error deleting old cadaster data: {str(e)}")
+            return Response(
+                {"detail": "خطا در حذف دیتای قدیمی"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        # Delete the database record
-        oldcadasterdata_instance.delete()
 
-        return Response(
-            {"detail": "دیتای کاداستر قدیمی با موفقیت حذف شد"}, 
-            status=status.HTTP_204_NO_CONTENT
-        )    
-    except OldCadasterData.DoesNotExist:
-        return Response(
-            {"detail": "دیتای کاداستر قدیمی با این آیدی یافت نشد"}, 
-            status=status.HTTP_404_NOT_FOUND
-        )
-    except Exception as e:
-        print(f"Error deleting old cadaster data: {str(e)}")
-        return Response(
-            {"detail": "خطا در حذف دیتای قدیمی"}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+class CadasterListApiView(APIView):
+    """
+        - GET (Read from Vector Tile Service Not Handle by Django)
+       - POST (Create new Cadaster Instance)     
+    """
+    pass 
 
+class CadasterDetailsApiView(APIView):
+    """
+        - GET
+        - PUT
+        - DELETE
+    """
+    pass 
 
+class ChangeCadsterStatusApiView(APIView):
+    """
+        Edit Status of a cadaster instance by user (superuser or user.company.is_moshaver)
+    """
+
+    class ChangeCadsterStatusInputSerializer(serializers.Serializer):
+        new_status = serializers.IntegerField()
+        
+        def validate_new_status(self, value):
+            valid_statuses = [choice[0] for choice in Cadaster.cadaster_status]
+            
+            if value not in valid_statuses:
+                raise serializers.ValidationError(
+                    f"Invalid status. Valid choices are: {valid_statuses}"
+                )
+            return value
+
+    def put(self , request:Request , cadasterid:int) -> Response:
+        try:
+            # Check permissions
+            if not (request.user.is_superuser or 
+                   (hasattr(request.user, 'company') and 
+                    getattr(request.user.company, 'is_moshaver', False))):
+                return Response(
+                    {"error": "شما اجازه انجام این عملیات را ندارید"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Get the cadaster instance
+            cadaster_instance = Cadaster.objects.get(pk = cadasterid)
+            
+            # Validate input data
+            serializer = self.ChangeCadsterStatusInputSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {"errors": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            new_status = serializer.validated_data['new_status']
+            
+            # Check if status is actually changing
+            if cadaster_instance.status == new_status:
+                return Response(
+                    {"message": "وضعیت تغییر داده شده با وضعیت فعلی تفاوتی ندارد"},
+                    status=status.HTTP_200_OK
+                )
+            
+            # Update the cadaster instance
+            old_status = cadaster_instance.status
+            cadaster_instance.status = new_status
+            cadaster_instance.change_status_date = timezone.now()
+            cadaster_instance.change_status_by = request.user
+            cadaster_instance.save()
+            
+            # # Get status display names for response
+            status_dict = dict(Cadaster.cadaster_status)
+            
+            return Response(
+                {
+                    "message": "وضعیت با موفقیت تغییر یافت",
+                    "cadaster_id": cadasterid,
+                    "old_status": {
+                        "code": old_status,
+                        "name": status_dict.get(old_status, "Unknown")
+                    },
+                    "new_status": {
+                        "code": new_status,
+                        "name": status_dict.get(new_status, "Unknown")
+                    },
+                    "changed_by": request.user.username,
+                    "changed_at": cadaster_instance.change_status_date.isoformat()
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Cadaster.DoesNotExist:
+            return Response(
+                {"error": "کاداستر یافت نشد"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            print(f"{str(e)}")
+            return Response(
+                {"error": f"خطا در تغییر وضعیت کاداستر"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
