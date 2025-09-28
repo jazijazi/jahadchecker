@@ -172,10 +172,78 @@ class UploadOldCadasterApiView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             ) 
         
-# class OldCadasterListApiView(APIView):
-        # Object level permission
-        # - superuser and supernazer get all
-        # - nazer and mohaver get only thoes in same proviance
+class OldCadasterListApiView(APIView):
+    """
+        Object level permission
+        - superuser and supernazer get all
+        - nazer and mohaver get only thoes in same proviance
+    """
+    class OldCadasterListOutputSerializer(serializers.ModelSerializer):
+        class OldCadasterListOutputSerializerUser(serializers.ModelSerializer):
+            class Meta:
+                model = User
+                fields = ['id','username','first_name_fa','last_name_fa']
+        class OldCadasterListOutputSerializerProvince(serializers.ModelSerializer):
+            class Meta:
+                model = Province
+                fields = ['id','name_fa']
+
+        matched_by = OldCadasterListOutputSerializerUser()
+        province = OldCadasterListOutputSerializerProvince()
+        class Meta:
+            model = OldCadasterData
+            fields = ['table_name','created_by','status','matched_by','matched_at','province']
+
+    def _check_user_permissions(self, user: User) -> tuple[bool, str]:
+        """user must be superuser or moshaver or nazer"""
+        if user.is_superuser:
+            return True, ""
+        
+        if not user.company:
+            return False, "کاربر بدون شرکت است"
+        
+        if not (user.company.is_nazer or user.company.is_moshaver):
+            return False, "شما اجازه خواندن کاداستر قدیمی را ندارید"
+        
+        return True, ""
+
+    def _get_province_for_user(self, user: User, province_id: int|None = None) -> tuple[Province|None, str]:
+        """Get appropriate province based on user type"""
+        if user.is_superuser:
+            try:
+                return Province.objects.get(pk=province_id), ""
+            except Province.DoesNotExist:
+                return None, "استان یافت نشد"
+        else:
+            # For nazer companies
+            province = user.company.provinces.first()
+            if not province:
+                return None, "شرکت شما به هیچ استانی متصل نیست"
+            return province, ""
+        
+    def get(self , request:Request) -> Response:
+        # Check permissions first
+        has_permission, error_msg = self._check_user_permissions(request.user)
+        if not has_permission:
+            return Response({"detail": error_msg}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            user = request.user
+            province_id_param = request.query_params.get('province_id',None)
+            province_instance , message = self._get_province_for_user(user=user,province_id=province_id_param)
+            if not province_instance:
+                return Response({"detail": message}, status=status.HTTP_403_FORBIDDEN) 
+            all_oldcadaster_instance = OldCadasterData.objects.filter(province=province_instance)
+            paginator = CustomPagination()
+            paginated_queryset = paginator.paginate_queryset(all_oldcadaster_instance, request)
+            serializer = self.OldCadasterListOutputSerializer(paginated_queryset,many=True,context={'request': request})
+            return paginator.get_paginated_response(serializer.data)
+        except Exception as e:
+            print(f"Error creating pelak: {str(e)}")
+            return Response(
+                {"detail": "خطا خواندن دیتای کاداستر قدیمی "}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class OldCadasterDetailsApiView(APIView):
     """

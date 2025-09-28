@@ -8,6 +8,7 @@ from landreg.views.flagviews import (
 )
 from landreg.views.cadasterviews import (
     UploadOldCadasterApiView,
+    OldCadasterListApiView,
     OldCadasterDetailsApiView,
 
     GetListLayersFromGeodbFile,
@@ -27,7 +28,7 @@ urlpatterns = [
 
     path('listlayersgdb/',GetListLayersFromGeodbFile.as_view(),name='list-layers-from-gdb'),
 
-
+    path('oldcadasterdata/' , OldCadasterListApiView.as_view() , name="oldcadasterdata-list"),
     path('oldcadasterdata/<int:oldcadasterid>/' , OldCadasterDetailsApiView.as_view() , name="oldcadasterdata-details"),
     path('updatecadasterstatus/<int:cadasterid>/' , ChangeCadsterStatusApiView.as_view() , name="oldcadasterdata-details"),
     
