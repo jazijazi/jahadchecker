@@ -1,0 +1,28 @@
+// url--> http://localhost:8000/api/landreg/tablecolumnnames/
+// body--> table_name = <tablename frm oldcadaster.tablename
+//response example
+{
+  "table_name": "plpwer_f4a33100",
+  "schema": "public",
+  "columns": [
+    {
+      "name": "id",
+      "type": "integer",
+      "nullable": true,
+      "precision": 32,
+      "scale": 0
+    },
+    {
+      "name": "weigt",
+      "type": "double precision",
+      "nullable": true,
+      "precision": 53
+    },
+    {
+      "name": "geometry",
+      "type": "USER-DEFINED",
+      "nullable": true
+    }
+  ],
+  "column_count": 3
+}

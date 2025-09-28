@@ -30,6 +30,11 @@ from landreg.services.tablename_service import (
     add_unique_suffix_to_layername
 )
 
+from landreg.services.database_service import (
+    drop_table_if_exists ,
+    create_new_database_engine,
+)
+
 
 class PekakResult(TypedDict):
     title: str
@@ -180,30 +185,69 @@ def process_pelak_border(
 
 
 
-from sqlalchemy import create_engine , Engine , text
-from urllib.parse import quote_plus
-from django.conf import settings
 
-def create_new_database_engine() -> Engine:
+
+def get_layersnames_from_zipped_geodatabase(
+  gdb_zip_file:InMemoryUploadedFile,   
+) -> List[str]:
+    # Create a temporary directory
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        zip_path = os.path.join(tmpdirname, f"gdbzipfile_{uuid.uuid4().hex[:8]}.zip")
+
+        # Save the uploaded file to the temp directory
+        with open(zip_path, 'wb+') as f:
+            for chunk in gdb_zip_file.chunks():
+                f.write(chunk)
+        
+        try:
+            # Extract zip file
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(tmpdirname)
+        except zipfile.BadZipFile:
+            raise GeoDatabaseValidationError("فایل زیپ شده ورودی معتبر نمیباشد")
+
+        # Find shapefile in the extracted directory
+        gdb_files = [f for f in os.listdir(tmpdirname) if f.endswith('.gdb')]
+        if not gdb_files:
+            raise GeoDatabaseValidationError("فایلی با پسوند .gdb در فایل زیپ شده ورودی یافت نشد")
+
+        gdb_path = os.path.join(tmpdirname, gdb_files[0])
+
+        try:
+            layers = fiona.listlayers(gdb_path)
+            return layers
+        except Exception as e:
+            print(e)
+            raise GeoDatabaseValidationError(f"خطا در خواندن ژیودیتابیس")
+        
+def save_gdbzipfile_into_tempdir_with_uuid(
+    gdb_zip_file : InMemoryUploadedFile,
+) -> str :
     """
-    Create a database engine with sqlalchemy and database values from setting if django
+        save the gdbzip file into /<temp directory>/uplodedgdbzipfiles/<uuid>/gdbzip.zip
+
+        Return the uuid as a string
     """
-    db_settings = settings.DATABASES['default']
-
-    user = quote_plus(db_settings['USER'])
-    password = quote_plus(db_settings['PASSWORD'])
-    host = db_settings['HOST']
-    port = db_settings['PORT']
-    db_name = db_settings['NAME']
-
-    db_url = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
-
     try:
-        engine = create_engine(db_url)
-    except Exception as e:
-        raise SqlAlchemyEnginError(f"Failed to create engine: {e}")
+        this_uuid : str = uuid.uuid4().hex
 
-    return engine
+        # Create the directory structure
+        base_temp_dir = tempfile.gettempdir()
+        upload_dir = os.path.join(base_temp_dir, "uplodedgdbzipfiles", this_uuid)
+        os.makedirs(upload_dir, exist_ok=True)
+
+        file_path = os.path.join(upload_dir, "gdbzip.zip")
+
+        # Save the uploaded file
+        with open(file_path, 'wb') as destination:
+            for chunk in gdb_zip_file.chunks():
+                destination.write(chunk)
+
+        return this_uuid
+    except Exception as e:
+        print(e)
+        raise GeoDatabaseValidationError(f"خطا در خواندن ژیودیتابیس")
+
 
 class ProcessResult(TypedDict):
     # Required keys
@@ -211,31 +255,7 @@ class ProcessResult(TypedDict):
     type_geo: str
     feature_count: int
 
-def drop_table_if_exists(table_name: str) -> bool:
-    """
-    Safely drop a table from the database if it exists.
-    
-    Args:
-        table_name: Name of the table to drop.
-    
-    Returns:
-        bool: True if drop command executed without error, False otherwise.
-    """
-    try:
-        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", table_name):
-            raise ValueError(f"Invalid table name: {table_name}")
 
-        engine = create_new_database_engine()
-
-        with engine.begin() as conn:
-            conn.execute(text(f'DROP TABLE IF EXISTS "{table_name}" CASCADE'))
-
-        print(f"Table '{table_name}' dropped successfully (if it existed).")
-        return True
-
-    except Exception as e:
-        print("Error dropping table:", e)
-        return False
     
 def process_geodataframe_into_postgisdb(table_name:str,gdf:GeoDataFrame)->ProcessResult:
     """
@@ -278,79 +298,82 @@ def process_geodataframe_into_postgisdb(table_name:str,gdf:GeoDataFrame)->Proces
     return res
 
 def process_gdb_file(
-    gdbzipfile: InMemoryUploadedFile
+    geodb_uuid:str,
+    selectedlayers:List[str],
 ) -> Any:
-    # Create a temporary directory
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        zip_path = os.path.join(tmpdirname, f"gdbzipfile_{uuid.uuid4().hex[:8]}.zip")
 
-        # Save the uploaded file to the temp directory
-        with open(zip_path, 'wb+') as f:
-            for chunk in gdbzipfile.chunks():
-                f.write(chunk)
+    base_temp_dir = tempfile.gettempdir()
+    file_path = os.path.join(base_temp_dir, "uplodedgdbzipfiles", geodb_uuid, "gdbzip.zip")
 
-        result: List[ProcessResult] = []
-        created_tables: List[str] = []
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"متاسفانه فایل زیپ شده پیدا نشد لطفا مجدد تلاش کنید")
+
+    result: List[ProcessResult] = []
+    created_tables: List[str] = []
+    
+    try:
+        # Extract zip file
+        with zipfile.ZipFile(file_path, 'r') as zip_ref:
+            zip_ref.extractall(f"{geodb_uuid}_dir")
+    except zipfile.BadZipFile:
+        raise GeoDatabaseValidationError("فایل زیپ شده ورودی معتبر نمیباشد")
+
+    # Find geodatabase file in the extracted directory
+    gdb_files = [f for f in os.listdir(f"{geodb_uuid}_dir") if f.endswith('.gdb')]
+    if not gdb_files:
+        raise GeoDatabaseValidationError("فایلی با پسوند .gdb در فایل زیپ شده ورودی یافت نشد")
+
+    gdb_path = os.path.join(f"{geodb_uuid}_dir", gdb_files[0])
+
+    try:
+        # Get layer names from the geodatabase
+        all_layer_names = fiona.listlayers(gdb_path)
+
+        # Check if all selected layers exist
+        missing_layers = [layer for layer in selectedlayers if layer not in all_layer_names]
+        if missing_layers:
+            raise ValueError(f"این لایه های انتخابی در فایل آپلود شده وجود ندارند: {missing_layers}")
         
-        try:
-            # Extract zip file
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                zip_ref.extractall(tmpdirname)
-        except zipfile.BadZipFile:
-            raise GeoDatabaseValidationError("فایل زیپ شده ورودی معتبر نمیباشد")
+        # validate each layer
+        for lyrnm in selectedlayers:
+            # validate layer name
+            res , message = validate_word_as_database_tablename(word=lyrnm)
+            if not res:
+                raise Exception(f"لایه {lyrnm} : {message}")
+            # Get gdf for this layer
+            gdf = gpd.read_file(gdb_path, layer=lyrnm)
+            # validate this gdf
+            res_validate , res_message = validate_geodataframe(gdf=gdf)
+            if not res_validate:
+                raise Exception(f"لایه {lyrnm} خطای {res_message} دارد")
 
-        # Find geodatabase file in the extracted directory
-        gdb_files = [f for f in os.listdir(tmpdirname) if f.endswith('.gdb')]
-        if not gdb_files:
-            raise GeoDatabaseValidationError("فایلی با پسوند .gdb در فایل زیپ شده ورودی یافت نشد")
-
-        gdb_path = os.path.join(tmpdirname, gdb_files[0])
-
-        try:
-            # Get layer names from the geodatabase
-            layer_names = fiona.listlayers(gdb_path)
+        #After sure all gdf`s validate and clean
+        for lyrnm in selectedlayers:
+            gdf = gpd.read_file(gdb_path, layer=lyrnm)
             
-            # validate each layer
-            for lyrnm in layer_names:
-                # validate layer name
-                res , message = validate_word_as_database_tablename(word=lyrnm)
-                if not res:
-                    raise Exception(f"لایه {lyrnm} : {message}")
-                # Get gdf for this layer
-                gdf = gpd.read_file(gdb_path, layer=lyrnm)
-                # validate this gdf
-                res_validate , res_message = validate_geodataframe(gdf=gdf)
-                if not res_validate:
-                    raise Exception(f"لایه {lyrnm} خطای {res_message} دارد")
-
-            #After sure all gdf`s validate and clean
-            for lyrnm in layer_names:
-                gdf = gpd.read_file(gdb_path, layer=lyrnm)
-                
-                lyrnm_with_suffix = add_unique_suffix_to_layername(originallayername=lyrnm)
-                
-                res:ProcessResult = process_geodataframe_into_postgisdb(
-                    table_name=lyrnm_with_suffix,
-                    gdf=gdf
-                )
-
-                # Track successfully created table
-                created_tables.append(lyrnm_with_suffix)
-                result.append(res)
-
-
-            return result
+            lyrnm_with_suffix = add_unique_suffix_to_layername(originallayername=lyrnm)
             
-        except Exception as e:
-            print(f"Error occurred: {e}")
-            print(f"Rolling back {len(created_tables)} created tables...")
-            
-            for table_name in created_tables:
-                try:
-                    drop_table_if_exists(table_name)
-                    print(f"Dropped table: {table_name}")
-                except Exception as drop_error:
-                    print(f"Failed to drop table {table_name}: {drop_error}")
+            res:ProcessResult = process_geodataframe_into_postgisdb(
+                table_name=lyrnm_with_suffix,
+                gdf=gdf
+            )
 
-            raise GeoDatabaseValidationError(f"خطا در خواندن ژیودیتابیس")
+            # Track successfully created table
+            created_tables.append(lyrnm_with_suffix)
+            result.append(res)
+
+        return result
+        
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        print(f"Rolling back {len(created_tables)} created tables...")
+        
+        for table_name in created_tables:
+            try:
+                drop_table_if_exists(table_name)
+                print(f"Dropped table: {table_name}")
+            except Exception as drop_error:
+                print(f"Failed to drop table {table_name}: {drop_error}")
+
+        raise GeoDatabaseValidationError(f"خطا در خواندن ژیودیتابیس")
         

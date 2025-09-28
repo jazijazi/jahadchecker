@@ -10,7 +10,10 @@ from landreg.views.cadasterviews import (
     UploadOldCadasterApiView,
     OldCadasterDetailsApiView,
 
-    ChangeCadsterStatusApiView
+    GetListLayersFromGeodbFile,
+    ChangeCadsterStatusApiView,
+    TableColumnNamesAPIView,
+    CadasterColumnMappingValidateAPIView,
 )
 
 
@@ -22,7 +25,13 @@ urlpatterns = [
 
     path('uploadoldcadaster/' , UploadOldCadasterApiView.as_view() , name="uoload-oldcadasterdata"),
 
+    path('listlayersgdb/',GetListLayersFromGeodbFile.as_view(),name='list-layers-from-gdb'),
+
+
     path('oldcadasterdata/<int:oldcadasterid>/' , OldCadasterDetailsApiView.as_view() , name="oldcadasterdata-details"),
     path('updatecadasterstatus/<int:cadasterid>/' , ChangeCadsterStatusApiView.as_view() , name="oldcadasterdata-details"),
+    
+    path('tablecolumnnames/' , TableColumnNamesAPIView.as_view() , name="oldcadasterdata-tablename"),
+    path('colmapvalidate/', CadasterColumnMappingValidateAPIView.as_view(), name='cadaster-column-mapping-validate'),
     
 ]

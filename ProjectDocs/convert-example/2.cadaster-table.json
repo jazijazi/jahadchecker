@@ -1,0 +1,178 @@
+// get table cadaster 
+// url: http://localhost:8000/api/landreg/tablecolumnnames/
+// body: table_name=landreg_cadaster name "landreg_cadaster" is static
+{
+  "table_name": "landreg_cadaster",
+  "schema": "public",
+  "columns": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "nullable": false,
+      "precision": 64,
+      "scale": 0
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false
+    },
+    {
+      "name": "border",
+      "type": "USER-DEFINED",
+      "nullable": false
+    },
+    {
+      "name": "uniquecode",
+      "type": "character varying",
+      "nullable": false,
+      "max_length": 100
+    },
+    {
+      "name": "jaam_code",
+      "type": "character varying",
+      "nullable": true,
+      "max_length": 100
+    },
+    {
+      "name": "plak_name",
+      "type": "character varying",
+      "nullable": true,
+      "max_length": 100
+    },
+    {
+      "name": "plak_asli",
+      "type": "character varying",
+      "nullable": true,
+      "max_length": 100
+    },
+    {
+      "name": "plak_farei",
+      "type": "character varying",
+      "nullable": true,
+      "max_length": 100
+    },
+    {
+      "name": "bakhsh_sabti",
+      "type": "character varying",
+      "nullable": true,
+      "max_length": 100
+    },
+    {
+      "name": "nahiye_sabti",
+      "type": "character varying",
+      "nullable": true,
+      "max_length": 100
+    },
+    {
+      "name": "area",
+      "type": "double precision",
+      "nullable": true,
+      "precision": 53
+    },
+    {
+      "name": "owner_name",
+      "type": "character varying",
+      "nullable": true,
+      "max_length": 100
+    },
+    {
+      "name": "owner_lastname",
+      "type": "character varying",
+      "nullable": true,
+      "max_length": 100
+    },
+    {
+      "name": "fathername",
+      "type": "character varying",
+      "nullable": true,
+      "max_length": 100
+    },
+    {
+      "name": "national_code",
+      "type": "character varying",
+      "nullable": true,
+      "max_length": 10
+    },
+    {
+      "name": "mobile",
+      "type": "character varying",
+      "nullable": true,
+      "max_length": 20
+    },
+    {
+      "name": "ownership_kinde",
+      "type": "character varying",
+      "nullable": true,
+      "max_length": 20
+    },
+    {
+      "name": "consulate_name",
+      "type": "character varying",
+      "nullable": true,
+      "max_length": 100
+    },
+    {
+      "name": "nezarat_type",
+      "type": "character varying",
+      "nullable": false,
+      "max_length": 50
+    },
+    {
+      "name": "project_name",
+      "type": "character varying",
+      "nullable": false,
+      "max_length": 50
+    },
+    {
+      "name": "nezart_verify_date",
+      "type": "timestamp with time zone",
+      "nullable": true
+    },
+    {
+      "name": "status",
+      "type": "integer",
+      "nullable": false,
+      "precision": 32,
+      "scale": 0
+    },
+    {
+      "name": "irrigation_type_id",
+      "type": "bigint",
+      "nullable": true,
+      "precision": 64,
+      "scale": 0
+    },
+    {
+      "name": "land_use_id",
+      "type": "bigint",
+      "nullable": true,
+      "precision": 64,
+      "scale": 0
+    },
+    {
+      "name": "pelak_id",
+      "type": "character varying",
+      "nullable": false,
+      "max_length": 100
+    },
+    {
+      "name": "change_status_by_id",
+      "type": "bigint",
+      "nullable": true,
+      "precision": 64,
+      "scale": 0
+    },
+    {
+      "name": "change_status_date",
+      "type": "timestamp with time zone",
+      "nullable": true
+    }
+  ],
+  "column_count": 28
+}

@@ -9,3 +9,11 @@ class SqlAlchemyEnginError(Exception):
 class GeoFrameValidationError(Exception):
     """Exception raised for errors in the geoframe validation."""
     pass
+
+class DatabaseError(Exception):
+    """Custom exception for database operations"""
+    pass
+
+class TableNotFoundError(DatabaseError):
+    """Exception raised when table is not found"""
+    pass

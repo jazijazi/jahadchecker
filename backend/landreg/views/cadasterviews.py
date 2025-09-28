@@ -5,7 +5,7 @@ from django.core.validators import FileExtensionValidator
 from rest_framework.response import Response
 from rest_framework.request import Request
 from rest_framework import serializers
-from rest_framework.permissions import AllowAny , IsAdminUser
+from rest_framework.permissions import AllowAny , IsAdminUser , IsAuthenticated
 from common.pagination import CustomPagination
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -17,14 +17,23 @@ from django.db import IntegrityError
 from landreg.services.gis import (
     process_pelak_border,
     process_gdb_file,
+    drop_table_if_exists,
+
+    get_layersnames_from_zipped_geodatabase,
+    save_gdbzipfile_into_tempdir_with_uuid,
 ) 
-from landreg.exceptions import GeoDatabaseValidationError
+from landreg.services.convert_service import (
+    validate_cadaster_column_mapping,
+    get_status_code,
+)
+from landreg.exceptions import TableNotFoundError,GeoDatabaseValidationError
 from landreg.models.flag import Flag
 from landreg.models.cadaster import Cadaster , OldCadasterData
 from common.models import Company , Province
 from accounts.models import User
+from landreg.services.database_service import get_table_columns
 from django.core.files.uploadedfile import InMemoryUploadedFile
-from landreg.services.gis import drop_table_if_exists
+
 
 
 class UploadOldCadasterApiView(APIView):
@@ -36,13 +45,24 @@ class UploadOldCadasterApiView(APIView):
     """
 
     class UploadOldCadasterInputSerializer(serializers.Serializer):
-        gdbzipfile = serializers.FileField(required=True,
-            help_text="ZIP file containing the gdb file",
+        uuid = serializers.CharField(required=True,
+            help_text="uuid is file path uuid",
             error_messages={
                 'required': "این فیلد اجباری است",
                 'blank': "این فیلد نمیتواند خالی باشد.",
                 'null': "این فیلد نمیتواند null باشد."
-            })
+            }
+        )
+        selectedlayers = serializers.ListField(
+            child=serializers.CharField(),
+            required=True,
+            help_text="لیستی از لایه های انتخاب شده برای بارگذاری",
+            error_messages={
+                'required': "این فیلد اجباری است",
+                'blank': "این فیلد نمیتواند خالی باشد.",
+                'null': "این فیلد نمیتواند null باشد."
+            }
+        )
         
         province_selected_id = serializers.IntegerField(
             required=False,
@@ -119,10 +139,12 @@ class UploadOldCadasterApiView(APIView):
             if not province_instance:
                 return Response({"detail": error_msg}, status=status.HTTP_400_BAD_REQUEST)
             
-            gdbzipfile:InMemoryUploadedFile = request.FILES['gdbzipfile']  # type: ignore
             
             from landreg.services.gis import ProcessResult
-            result:List[ProcessResult] = process_gdb_file(gdbzipfile=gdbzipfile)
+            result:List[ProcessResult] = process_gdb_file(
+                geodb_uuid = input_serializer.validated_data.get('uuid'),
+                selectedlayers = input_serializer.validated_data.get('selectedlayers')
+            )
             
             created_oldcadasterdata : List[OldCadasterData] = []
 
@@ -140,7 +162,9 @@ class UploadOldCadasterApiView(APIView):
         except GeoDatabaseValidationError as gdderr:
             return Response({"detail": f"{str(gdderr)}"}, status=status.HTTP_400_BAD_REQUEST)
 
-            
+        except FileNotFoundError as ferr:
+            # self._cleanup(tablenames=name_layers_en_after_clean)
+            return Response({"detail": f"{str(ferr)}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             print(f"Error creating pelak: {str(e)}")
             return Response(
@@ -290,6 +314,54 @@ class CadasterDetailsApiView(APIView):
     """
     pass 
 
+class GetListLayersFromGeodbFile(APIView):
+    """
+    API to get all layers from zipped GeoDatabase 
+    """
+    permission_classes = [IsAuthenticated]
+
+    class GetListLayersFromGeodbFileInputSerializer(serializers.Serializer):
+        gdbzipfile = serializers.FileField(required=True,
+            help_text="ZIP file containing the gdb file",
+            error_messages={
+                'required': "این فیلد اجباری است",
+                'blank': "این فیلد نمیتواند خالی باشد.",
+                'null': "این فیلد نمیتواند null باشد."
+            })
+          
+        def validate_gdbzipfile(self,value):
+            if not zipfile.is_zipfile(value):
+                raise serializers.ValidationError("فایل باید از نوع ZIP باشد.")
+            
+    def post(self, request:Request) -> Response:
+        """
+        get a zip file in requst files 
+        get gdb from fille after unzip the file
+        get all layers from zipped file and return it in Response 
+        """
+
+        input_serializer = self.GetListLayersFromGeodbFileInputSerializer(data=request.data)
+        if not input_serializer.is_valid():
+            return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        gdbzipfile = request.FILES['gdbzipfile']
+
+        try:
+            all_layer_list = get_layersnames_from_zipped_geodatabase(gdb_zip_file=gdbzipfile)
+
+            dir_uuid = save_gdbzipfile_into_tempdir_with_uuid(gdb_zip_file=gdbzipfile)
+
+            return Response({
+                "layers": all_layer_list,
+                "uuid": dir_uuid,
+            }, status=status.HTTP_200_OK)
+        
+        except GeoDatabaseValidationError as gdderr:
+            return Response({"detail": f"{str(gdderr)}"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"detail": f"{str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class ChangeCadsterStatusApiView(APIView):
     """
         Edit Status of a cadaster instance by user (superuser or user.company.is_moshaver)
@@ -375,5 +447,121 @@ class ChangeCadsterStatusApiView(APIView):
             print(f"{str(e)}")
             return Response(
                 {"error": f"خطا در تغییر وضعیت کاداستر"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class TableColumnNamesAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    """
+    Get columns and types of a PostGIS table.
+    Expects JSON body: { "table_name": "your_table_name" }
+    """
+    def post(self, request):
+        table_name = request.data.get("table_name")
+        schema = request.data.get("schema")  # Optional schema parameter
+        
+        if not table_name:
+            return Response(
+                {"error": "table_name is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            columns = get_table_columns(table_name, schema)
+            return Response({
+                "table_name": table_name,
+                "schema": schema or "public",
+                "columns": columns,
+                "column_count": len(columns)
+            })
+            
+        except ValueError as e:
+            return Response(
+                {"error": f"Invalid input: {e}"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        except TableNotFoundError as e:
+            return Response(
+                {"error": str(e)}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+                        
+        except Exception as e:
+            return Response(
+                {"error": "An unexpected error occurred"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class CadasterColumnMappingValidateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        source_table_name = request.data.get("source_table_name")
+        source_table_schema = request.data.get("source_table_schema", "public")
+        matched_fields = request.data.get("matched_fields", [])
+        
+        # Validation
+        if not source_table_name:
+            return Response(
+                {"error": "نام جدول مبدا (source_table_name) الزامی است"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not isinstance(matched_fields, list):
+            return Response(
+                {"error": "فیلد matched_fields باید یک لیست باشد"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if len(matched_fields) == 0:
+            return Response(
+                {"error": "حداقل یک نگاشت ستون مورد نیاز است"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Validate the mapping
+            validation_result = validate_cadaster_column_mapping(
+                source_table_name, 
+                source_table_schema, 
+                matched_fields
+            )
+            
+            # Determine response status based on validation results
+            status_code = get_status_code(validation_result['mapping_summary'])
+            validation_result['status_code'] = status_code
+            
+            if status_code == -1:
+                response_status = status.HTTP_400_BAD_REQUEST
+                validation_result['status'] = 'validation_failed'
+                validation_result['message'] = 'برخی از نگاشت‌های ستون نامعتبر هستند'
+            elif status_code == 0:
+                response_status = status.HTTP_200_OK
+                validation_result['status'] = 'validation_passed_with_warnings'
+                validation_result['message'] = 'نگاشت‌های ستون معتبر هستند اما دارای هشدار می‌باشند'
+            else:  # status_code == 1
+                response_status = status.HTTP_200_OK
+                validation_result['status'] = 'validation_passed'
+                validation_result['message'] = 'همه نگاشت‌های ستون معتبر هستند'
+            
+            return Response(validation_result, status=response_status)
+            
+        except ValueError as e:
+            return Response(
+                {"error": f"ورودی نامعتبر: {e}"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        except TableNotFoundError as e:
+            return Response(
+                {"error": str(e)}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        except Exception as e:
+            return Response(
+                {"error": "خطای غیرمنتظره‌ای رخ داده است"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

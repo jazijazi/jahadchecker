@@ -1,0 +1,117 @@
+// url -->> http://localhost:8000/api/landreg/colmapvalidate/
+// distination_table name is static and always "landreg_cadaster" no need to send
+// distination_table schema is static and always "public" no need to send
+// request body in json format
+{
+  "source_table_name":"plpwer_f4a33100",
+  "source_table_schema":"public",
+  "matched_fields":[
+    {
+      "old_cadaster_col":"weigt",
+      "landreg_cadaster_col":"jaam_code"
+    }
+  ]
+}
+// response body
+{
+  "source_table": {
+    "name": "glg_lim_b548964b",
+    "schema": "public",
+    "total_columns": 9
+  },
+  "destination_table": {
+    "name": "landreg_cadaster",
+    "schema": "public",
+    "total_columns": 28
+  },
+  "mapping_summary": {
+    "total_mappings": 2,
+    "valid_mappings": 2,
+    "invalid_mappings": 0,
+    "mappings_with_warnings": 1,
+    "unmapped_source_columns": 7,
+    "unmapped_destination_columns": 26
+  },
+  "valid_mappings": [
+    {
+      "index": 0,
+      "old_cadaster_col": "Comment",
+      "landreg_cadaster_col": "jaam_code",
+      "errors": [],
+      "warnings": [],
+      "source_column_info": {
+        "name": "Comment",
+        "type": "text",
+        "nullable": true
+      },
+      "destination_column_info": {
+        "name": "jaam_code",
+        "type": "character varying",
+        "nullable": true
+      }
+    },
+    {
+      "index": 1,
+      "old_cadaster_col": "number",
+      "landreg_cadaster_col": "irrigation_type_id",
+      "errors": [],
+      "warnings": [
+        "عدم تطابق نوع داده: مبدا 'text' -> مقصد 'bigint'"
+      ],
+      "source_column_info": {
+        "name": "number",
+        "type": "text",
+        "nullable": true
+      },
+      "destination_column_info": {
+        "name": "irrigation_type_id",
+        "type": "bigint",
+        "nullable": true
+      }
+    }
+  ],
+  "invalid_mappings": [],
+  "unmapped_source_columns": [
+    "Id",
+    "Name",
+    "SHAPE_Leng",
+    "SHAPE_Area",
+    "title",
+    "scale",
+    "geometry"
+  ],
+  "unmapped_destination_columns": [
+    "id",
+    "created_at",
+    "updated_at",
+    "border",
+    "uniquecode",
+    "plak_name",
+    "plak_asli",
+    "plak_farei",
+    "bakhsh_sabti",
+    "nahiye_sabti",
+    "area",
+    "owner_name",
+    "owner_lastname",
+    "fathername",
+    "national_code",
+    "mobile",
+    "ownership_kinde",
+    "consulate_name",
+    "nezarat_type",
+    "project_name",
+    "nezart_verify_date",
+    "status",
+    "land_use_id",
+    "pelak_id",
+    "change_status_by_id",
+    "change_status_date"
+  ],
+  "general_warnings": [
+    "عدم تطابق نوع داده: مبدا 'text' -> مقصد 'bigint'"
+  ],
+  "status_code": 0, // -0 success with warning | 1 success without wanrning | -1 fail 
+  "status": "validation_passed_with_warnings",
+  "message": "نگاشت‌های ستون معتبر هستند اما دارای هشدار می‌باشند"
+}
