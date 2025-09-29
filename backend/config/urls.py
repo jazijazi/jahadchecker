@@ -15,6 +15,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
 
     path('api/common/', include('common.urls')),
+    path('api/captcha/' , include('captcha.urls')),
     path('api/auth/', include('accounts.urls', namespace='accounts')),
     
     path('api/landreg/', include('landreg.urls')),
