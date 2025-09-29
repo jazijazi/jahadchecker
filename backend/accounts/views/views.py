@@ -315,7 +315,7 @@ class UserProfile(APIView):
             provinces = UserProfileOutputSerializerCompanyProvinces(many=True)
             class Meta:
                 model = Company
-                fields = ['id' , 'name' , 'typ' , 'provinces' , 'is_nazer' , 'is_supernazer' , 'is_moshaver']
+                fields = ['id' , 'name' , 'provinces' , 'is_nazer' , 'is_supernazer' , 'is_moshaver']
         roles = UserProfileOutputSerializerRoles()
         company = UserProfileOutputSerializerCompany()
         class Meta:
