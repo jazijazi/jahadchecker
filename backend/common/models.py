@@ -82,13 +82,6 @@ class Company(CustomModel):
         null=False,
         unique=False
     )
-    typ = models.CharField(
-        verbose_name="نوع شرکت",
-        max_length=100, 
-        blank=True,
-        null=True, 
-        unique=False
-    )
     callnumber = models.CharField(
         verbose_name="شماره تماس",
         max_length=100, 

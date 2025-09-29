@@ -66,7 +66,7 @@ class CompanyListApiView(APIView):
     class CompanyListInputSerializer(serializers.ModelSerializer):
         class Meta:
             model = Company
-            fields = ['name', 'typ', 'callnumber', 'address', 'comment', 'provinces', 'is_nazer', 'is_supernazer', 'is_moshaver']
+            fields = ['name', 'callnumber', 'address', 'comment', 'provinces', 'is_nazer', 'is_supernazer', 'is_moshaver']
     
     class CompanyListOutputSerializer(serializers.ModelSerializer):
         class CompanyListOutputSerializerProvince(serializers.ModelSerializer):
@@ -78,7 +78,7 @@ class CompanyListApiView(APIView):
         
         class Meta:
             model = Company
-            fields = ['id', 'name', 'typ', 'provinces', 'is_nazer', 'is_supernazer', 'is_moshaver']
+            fields = ['id', 'name', 'provinces', 'is_nazer', 'is_supernazer', 'is_moshaver']
 
     def get(self , request:Request) -> Response:
         """
@@ -128,12 +128,12 @@ class CompanyDetailsApiView(APIView):
         
         class Meta:
             model = Company
-            fields = ['id', 'name', 'typ', 'callnumber', 'address', 'comment', 'provinces', 'is_nazer', 'is_supernazer', 'is_moshaver']
+            fields = ['id', 'name', 'callnumber', 'address', 'comment', 'provinces', 'is_nazer', 'is_supernazer', 'is_moshaver']
 
     class CompanyDetailsInputSerializer(serializers.ModelSerializer):
         class Meta:
             model = Company
-            fields = ['name', 'typ', 'callnumber', 'address', 'comment', 'provinces', 'is_nazer', 'is_supernazer', 'is_moshaver']
+            fields = ['name', 'callnumber', 'address', 'comment', 'provinces', 'is_nazer', 'is_supernazer', 'is_moshaver']
 
 
     def get(self , request:Request, companyid:int) -> Response:

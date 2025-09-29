@@ -17,8 +17,8 @@ class CountyAdmin(admin.ModelAdmin):
     list_per_page = 400
     
 class CompanyAdmin(admin.ModelAdmin):
-    list_display = ['name', 'typ' , 'is_nazer' , 'is_supernazer' , 'is_moshaver']
-    search_fields = ['name' , 'typ']
+    list_display = ['name' , 'is_nazer' , 'is_supernazer' , 'is_moshaver']
+    search_fields = ['name',]
 
 admin.site.register(Province,ProvinceAdmin)
 admin.site.register(County,CountyAdmin)

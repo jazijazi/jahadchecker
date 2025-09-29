@@ -1,6 +1,7 @@
 // url -->> http://localhost:8000/api/landreg/colmapvalidate/
 // distination_table name is static and always "landreg_cadaster" no need to send
 // distination_table schema is static and always "public" no need to send
+
 // request body in json format
 {
   "source_table_name":"plpwer_f4a33100",
