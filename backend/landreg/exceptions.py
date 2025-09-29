@@ -17,3 +17,7 @@ class DatabaseError(Exception):
 class TableNotFoundError(DatabaseError):
     """Exception raised when table is not found"""
     pass
+
+class CadasterImportError(Exception):
+    """Exception raised during cadaster import"""
+    pass

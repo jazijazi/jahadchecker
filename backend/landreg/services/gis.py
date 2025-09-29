@@ -297,6 +297,103 @@ def process_geodataframe_into_postgisdb(table_name:str,gdf:GeoDataFrame)->Proces
     }
     return res
 
+def process_shp_file(
+    shpzipfile : InMemoryUploadedFile,
+)-> Any:
+    """
+     Args:
+        shpzipfile (InMemoryUploadedFile): Uploaded zip file containing shapefile components.
+
+    Returns:
+        Any: List of ProcessResult for each processed layer (usually 1 shapefile per zip).
+    
+    """
+
+    temp_dir = None
+    result: List[ProcessResult] = []
+    created_tables: List[str] = []
+    
+    try:
+        shpzipfile.seek(0)
+        temp_dir = tempfile.mkdtemp()
+        with zipfile.ZipFile(shpzipfile, 'r') as zip_ref:
+            zip_ref.extractall(temp_dir)
+        shp_file = None
+        extracted_files = os.listdir(temp_dir)
+        for file in extracted_files:
+            if file.lower().endswith('.shp'):
+                shp_file = os.path.join(temp_dir, file)
+                break
+        if not shp_file:
+            raise FileNotFoundError('فایلی با فرمت .shp در زیپ فایل یافت نشد')
+        # Check for required shapefile components
+        base_name = os.path.splitext(shp_file)[0]
+        required_extensions = ['.shp', '.shx', '.dbf']
+        missing_files = []
+        for ext in required_extensions:
+            if not os.path.exists(base_name + ext):
+                missing_files.append(ext)
+        if missing_files:
+            raise FileNotFoundError(f'این فایل ها در زیپ فایل یافت نشد: {missing_files}')
+        
+        # derive layer name from file name
+        layer_name = os.path.splitext(os.path.basename(shp_file))[0]
+        layer_name = layer_name.strip().replace(" ", "_")
+        # validate table name
+        ok, msg = validate_word_as_database_tablename(word=layer_name)
+        if not ok:
+            raise Exception(f"لایه {layer_name} : {msg}")
+        
+        # read shapefile into gdf
+        gdf = gpd.read_file(shp_file)
+
+        # validate gdf
+        ok, msg = validate_geodataframe(gdf=gdf)
+        if not ok:
+            raise Exception(f"لایه {layer_name} خطای {msg} دارد")
+
+        # assign unique name for DB
+        table_name = add_unique_suffix_to_layername(originallayername=layer_name)
+
+        # insert into PostGIS
+        process_geodataframe_into_postgisdb(
+            table_name=table_name,
+            gdf=gdf,
+        )
+
+        created_tables.append(table_name)
+
+        # build ProcessResult
+        geom_types = list(gdf.geom_type.unique())
+        type_geo = str(geom_types[0]) if len(geom_types) == 1 else "Mixed"
+        pr: ProcessResult = {
+            "table_name": table_name,
+            "type_geo": type_geo,
+            "feature_count": int(len(gdf)),
+        }
+        result.append(pr)
+
+        return result
+
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        print(f"Rolling back {len(created_tables)} created tables...")
+
+        for table_name in created_tables:
+            try:
+                drop_table_if_exists(table_name)
+                print(f"Dropped table: {table_name}")
+            except Exception as drop_error:
+                print(f"Failed to drop table {table_name}: {drop_error}")
+
+        raise GeoDatabaseValidationError("خطا در خواندن shapefile زیپ شده")
+
+    finally:
+        if temp_dir and os.path.exists(temp_dir):
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 def process_gdb_file(
     geodb_uuid:str,
     selectedlayers:List[str],
@@ -337,6 +434,7 @@ def process_gdb_file(
         # validate each layer
         for lyrnm in selectedlayers:
             # validate layer name
+            lyrnm = lyrnm.strip().replace(" ", "_")
             res , message = validate_word_as_database_tablename(word=lyrnm)
             if not res:
                 raise Exception(f"لایه {lyrnm} : {message}")

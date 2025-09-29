@@ -126,8 +126,12 @@ def get_table_columns(table_name: str, schema: Optional[str] = None) -> List[Dic
                 {"table_name": table_name, "schema": schema}
             )
             
+            exclude_col_names = ['id', 'created_at', 'updated_at', 'border', 'status',
+                                  'change_status_by_id', 'pelak_id', 'change_status_date','geometry']
             columns = []
             for row in result:
+                if row.column_name in exclude_col_names:
+                    continue
                 column_info = {
                     "name": row.column_name,
                     "type": row.data_type,

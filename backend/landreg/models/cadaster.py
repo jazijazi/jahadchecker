@@ -172,16 +172,16 @@ class Cadaster(CustomModel):
         verbose_name="نوع نظارت",
         max_length=50,
         choices=NEZARAT_TYPE_CHOICES,
-        blank=False,
-        null=False
+        blank=True,
+        null=True
     )
     
     project_name = models.CharField(
         verbose_name="نام پروژه",
         max_length=50,
         choices=PROJECT_NAME_CHOICES,
-        blank=False,
-        null=False
+        blank=True,
+        null=True
     )
     nezart_verify_date = models.DateTimeField(
         verbose_name="تاریخ تایید نظارت",

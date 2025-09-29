@@ -7,7 +7,8 @@ from landreg.views.flagviews import (
     FlagListApiView,
 )
 from landreg.views.cadasterviews import (
-    UploadOldCadasterApiView,
+    UploadOldCadasterFromGdbApiView,
+    UploadOldCadasterFromShapefileApiView,
     OldCadasterListApiView,
     OldCadasterDetailsApiView,
 
@@ -15,6 +16,7 @@ from landreg.views.cadasterviews import (
     ChangeCadsterStatusApiView,
     TableColumnNamesAPIView,
     CadasterColumnMappingValidateAPIView,
+    CadasterImportAPIView,
 )
 
 
@@ -24,7 +26,8 @@ urlpatterns = [
 
     path('flag/<int:cadasterid>/',FlagListApiView.as_view(),name="flag-list"),
 
-    path('uploadoldcadaster/' , UploadOldCadasterApiView.as_view() , name="uoload-oldcadasterdata"),
+    path('uploadoldcadasterfromshapefile/' , UploadOldCadasterFromShapefileApiView.as_view() , name="upload-oldcadasterdata-shp"),
+    path('uploadoldcadasterfromgeodatabase/' , UploadOldCadasterFromGdbApiView.as_view() , name="upload-oldcadasterdata-gdb"),
 
     path('listlayersgdb/',GetListLayersFromGeodbFile.as_view(),name='list-layers-from-gdb'),
 
@@ -34,5 +37,6 @@ urlpatterns = [
     
     path('tablecolumnnames/' , TableColumnNamesAPIView.as_view() , name="oldcadasterdata-tablename"),
     path('colmapvalidate/', CadasterColumnMappingValidateAPIView.as_view(), name='cadaster-column-mapping-validate'),
+    path('cadasterimport/', CadasterImportAPIView.as_view(), name='cadaster-import'),
     
 ]

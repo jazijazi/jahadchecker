@@ -17,6 +17,7 @@ from django.db import IntegrityError
 from landreg.services.gis import (
     process_pelak_border,
     process_gdb_file,
+    process_shp_file,
     drop_table_if_exists,
 
     get_layersnames_from_zipped_geodatabase,
@@ -25,18 +26,144 @@ from landreg.services.gis import (
 from landreg.services.convert_service import (
     validate_cadaster_column_mapping,
     get_status_code,
+    import_cadaster_data,
 )
-from landreg.exceptions import TableNotFoundError,GeoDatabaseValidationError
+from landreg.exceptions import (
+    TableNotFoundError,
+    GeoDatabaseValidationError,
+    CadasterImportError
+)
 from landreg.models.flag import Flag
 from landreg.models.cadaster import Cadaster , OldCadasterData
 from common.models import Company , Province
 from accounts.models import User
-from landreg.services.database_service import get_table_columns
+from landreg.services.database_service import get_table_columns 
 from django.core.files.uploadedfile import InMemoryUploadedFile
 
 
+class UploadOldCadasterFromShapefileApiView(APIView):
+    """
+        1. upload oldcadaster data as a Shapefile !
+        2. save the shapefile in OldCadasterData
+        *** only user.issuperuser and user.company.is_nazer can use this api
+    """
+    
+    class UploadOldCadasterFromShapefileInputSerializer(serializers.Serializer):
+        file = serializers.FileField(
+            required=False,
+            allow_null=True,
+            validators=[
+                FileExtensionValidator(
+                    allowed_extensions=['zip'],
+                    message="فایل محدوده حتما باید با فرمت zip باشد"
+                )
+            ]
+        )
+        province_selected_id = serializers.IntegerField(
+            required=False,
+            allow_null=True,  # Allow null for non-superusers
+        )
 
-class UploadOldCadasterApiView(APIView):
+        def validate_province_selected_id(self, value):
+            if value is None:
+                return value
+            try:
+                Province.objects.get(pk=value)
+                return value
+            except Province.DoesNotExist:
+                raise serializers.ValidationError("استانی با این آیدی یافت نشد")
+          
+        def validate_gdbzipfile(self,value):
+            if not zipfile.is_zipfile(value):
+                raise serializers.ValidationError("فایل باید از نوع ZIP باشد.")
+ 
+    class UploadOldCadasterFromShapefileOutputSerializer(serializers.ModelSerializer):
+        class Meta:
+            model = OldCadasterData
+            fields = ['id','table_name','status']
+
+    def _check_user_permissions(self, user: User) -> tuple[bool, str]:
+        """Check if user has permission to create pelak"""
+        if user.is_superuser:
+            return True, ""
+        
+        if not user.company:
+            return False, "کاربر بدون شرکت است"
+        
+        if not user.company.is_nazer:
+            return False, "شما اجازه بارگذاری پلاک جدید را ندارید"
+        
+        return True, ""
+    
+    def _get_province_for_user(self, user: User, province_id: int|None = None) -> tuple[Province|None, str]:
+        """Get appropriate province based on user type"""
+        if user.is_superuser:
+            try:
+                return Province.objects.get(pk=province_id), ""
+            except Province.DoesNotExist:
+                return None, "استان یافت نشد"
+        else:
+            # For nazer companies
+            province = user.company.provinces.first()
+            if not province:
+                return None, "شرکت شما به هیچ استانی متصل نیست"
+            return province, ""   
+        
+
+    def post(self , request:Request) -> Response:
+        try:
+            user:User = request.user
+            
+            has_permission, error_msg = self._check_user_permissions(user)
+            if not has_permission:
+                return Response({"detail": error_msg}, status=status.HTTP_403_FORBIDDEN)
+            
+            input_serializer = self.UploadOldCadasterFromShapefileInputSerializer(data=request.data)
+            if not input_serializer.is_valid():
+                return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+            validated_data = cast(Dict[str, Any], input_serializer.validated_data)
+            
+            # Get province for user 
+            province_instance, error_msg = self._get_province_for_user(
+                user, 
+                validated_data.get('province_selected_id')
+            )
+            if not province_instance:
+                return Response({"detail": error_msg}, status=status.HTTP_400_BAD_REQUEST)
+            
+            
+            from landreg.services.gis import ProcessResult
+            result:List[ProcessResult] = process_shp_file(
+                shpzipfile=validated_data['file']
+            )
+            created_oldcadasterdata : List[OldCadasterData] = []
+
+            for res in result:
+                oldcadasterdata_new_instance = OldCadasterData.objects.create(
+                    table_name = res["table_name"],
+                    created_by = user,
+                    province = province_instance,
+                )
+                created_oldcadasterdata.append(oldcadasterdata_new_instance)
+
+            output_serializer = self.UploadOldCadasterFromShapefileOutputSerializer(created_oldcadasterdata,many=True)
+            return Response(output_serializer.data , status=status.HTTP_201_CREATED)
+            
+        except GeoDatabaseValidationError as gdderr:
+            return Response({"detail": f"{str(gdderr)}"}, status=status.HTTP_400_BAD_REQUEST)
+        except FileNotFoundError as ferr:
+            # self._cleanup(tablenames=name_layers_en_after_clean)
+            return Response({"detail": f"{str(ferr)}"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"Error creating cadaster via shpfile: {str(e)}")
+            return Response(
+                {"detail": "خطا در بارگذاری دیتای قدیمی "}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            ) 
+
+
+class UploadOldCadasterFromGdbApiView(APIView):
     """
         1. upload oldcadaster data as a geodatabase !
         2. get layers from geodatabase and save them to postgres as a new table for each layer
@@ -44,7 +171,7 @@ class UploadOldCadasterApiView(APIView):
         *** only user.issuperuser and user.company.is_nazer can use this api
     """
 
-    class UploadOldCadasterInputSerializer(serializers.Serializer):
+    class UploadOldCadasterFromGdbInputSerializer(serializers.Serializer):
         uuid = serializers.CharField(required=True,
             help_text="uuid is file path uuid",
             error_messages={
@@ -82,7 +209,7 @@ class UploadOldCadasterApiView(APIView):
             if not zipfile.is_zipfile(value):
                 raise serializers.ValidationError("فایل باید از نوع ZIP باشد.")
             
-    class UploadOldCadasterOutputSerializer(serializers.ModelSerializer):
+    class UploadOldCadasterFromGdbOutputSerializer(serializers.ModelSerializer):
         
         class Meta:
             model = OldCadasterData
@@ -125,7 +252,7 @@ class UploadOldCadasterApiView(APIView):
             if not has_permission:
                 return Response({"detail": error_msg}, status=status.HTTP_403_FORBIDDEN)
             
-            input_serializer = self.UploadOldCadasterInputSerializer(data=request.data)
+            input_serializer = self.UploadOldCadasterFromGdbInputSerializer(data=request.data)
             if not input_serializer.is_valid():
                 return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             
@@ -156,7 +283,7 @@ class UploadOldCadasterApiView(APIView):
                 )
                 created_oldcadasterdata.append(oldcadasterdata_new_instance)
 
-            output_serializer = self.UploadOldCadasterOutputSerializer(created_oldcadasterdata,many=True)
+            output_serializer = self.UploadOldCadasterFromGdbOutputSerializer(created_oldcadasterdata,many=True)
             return Response(output_serializer.data , status=status.HTTP_201_CREATED)
 
         except GeoDatabaseValidationError as gdderr:
@@ -166,7 +293,7 @@ class UploadOldCadasterApiView(APIView):
             # self._cleanup(tablenames=name_layers_en_after_clean)
             return Response({"detail": f"{str(ferr)}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            print(f"Error creating pelak: {str(e)}")
+            print(f"Error creating cadaster via Geodatabase: {str(e)}")
             return Response(
                 {"detail": "خطا در بارگذاری دیتای قدیمی "}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -520,7 +647,7 @@ class ChangeCadsterStatusApiView(APIView):
 
 
 class TableColumnNamesAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated] #TODO : Dynamic & only mohaver and superuser allow to this view
     """
     Get columns and types of a PostGIS table.
     Expects JSON body: { "table_name": "your_table_name" }
@@ -563,7 +690,7 @@ class TableColumnNamesAPIView(APIView):
             )
 
 class CadasterColumnMappingValidateAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated] #TODO : Dynamic & only mohaver and superuser allow to this view
     
     def post(self, request):
         source_table_name = request.data.get("source_table_name")
@@ -631,5 +758,112 @@ class CadasterColumnMappingValidateAPIView(APIView):
         except Exception as e:
             return Response(
                 {"error": "خطای غیرمنتظره‌ای رخ داده است"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+class CadasterImportAPIView(APIView):
+    permission_classes = [IsAuthenticated] #TODO : Dynamic & only mohaver and superuser allow to this view
+    """
+    Import data from source table to Cadaster model.
+    """
+    
+    def post(self, request):
+        source_table_name = request.data.get("source_table_name")
+        source_table_schema = request.data.get("source_table_schema", "public")
+        matched_fields = request.data.get("matched_fields", [])
+        pelak_id = request.data.get("pelak_id")
+        
+        # Validation
+        if not source_table_name:
+            return Response(
+                {"error": "نام جدول مبدا (source_table_name) الزامی است"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not pelak_id:
+            return Response(
+                {"error": "شناسه پلاک (pelak_id) الزامی است"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not isinstance(matched_fields, list) or len(matched_fields) == 0:
+            return Response(
+                {"error": "حداقل یک نگاشت ستون مورد نیاز است"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            old_cadaster_instance = OldCadasterData.objects.get(table_name=source_table_name)
+
+            # First validate the mapping
+            validation_result = validate_cadaster_column_mapping(
+                source_table_name, 
+                source_table_schema, 
+                matched_fields
+            )
+            
+            status_code = get_status_code(validation_result['mapping_summary'])
+            
+            # Only proceed if validation passed (with or without warnings)
+            if status_code == -1:
+                return Response(
+                    {
+                        "error": "نگاشت‌های ستون نامعتبر هستند. لطفاً ابتدا نگاشت‌ها را اصلاح کنید",
+                        "validation_errors": validation_result['invalid_mappings']
+                    }, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Perform import
+            import_result = import_cadaster_data(
+                source_table_name,
+                source_table_schema,
+                matched_fields,
+                pelak_id
+            )
+            
+            # Check if import was successful
+            if not import_result['success']:
+                return Response(
+                    {
+                        "error": import_result.get('message', 'عملیات import ناموفق بود'),
+                        "import_summary": import_result
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            #change oldcadaster record
+            old_cadaster_instance.status = OldCadasterData.Status.MATCHED
+            old_cadaster_instance.matched_by = request.user
+            old_cadaster_instance.matched_at = timezone.now()
+            old_cadaster_instance.save()
+            
+            response_data = {
+                "message": "عملیات import با موفقیت انجام شد",
+                "import_summary": import_result,
+                "validation_warnings": validation_result.get('general_warnings', []) if status_code == 0 else []
+            }
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
+            
+        except CadasterImportError as e:
+            return Response(
+                {"error": str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        except TableNotFoundError as e:
+            return Response(
+                {"error": str(e)}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        except Exception as e:
+            # Log the full error for debugging
+            import traceback
+            print(traceback.format_exc())
+            
+            return Response(
+                {"error": f"خطای غیرمنتظره: {str(e)}"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

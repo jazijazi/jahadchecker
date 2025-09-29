@@ -1,8 +1,11 @@
+import re 
+from sqlalchemy import text
 from typing import List, Dict, Any, Optional
+from django.db import transaction
+from django.contrib.gis.geos import GEOSGeometry
+from landreg.exceptions import TableNotFoundError , CadasterImportError
 
-from landreg.exceptions import TableNotFoundError
-
-from landreg.services.database_service import get_table_columns
+from landreg.services.database_service import get_table_columns , create_new_database_engine
 
 def type_compatible(source_type: str, target_type: str) -> bool:
     """Check if column types are compatible for mapping"""
@@ -49,19 +52,7 @@ def validate_cadaster_column_mapping(
     matched_fields: List[Dict[str, str]]
 ) -> Dict[str, Any]:
     """
-    Validate column mapping between source table and landreg_cadaster table.
-    
-    Args:
-        source_table_name: Name of the source table
-        source_table_schema: Schema of the source table
-        matched_fields: List of column mappings
-        
-    Returns:
-        Dictionary with validation results
-        
-    Raises:
-        TableNotFoundError: When source table is not found
-        DatabaseError: When there's a database error
+    mapping between source table and landreg_cadaster table.
     """
     # Fixed destination table
     destination_table_name = "landreg_cadaster"
@@ -73,9 +64,9 @@ def validate_cadaster_column_mapping(
         destination_columns = get_table_columns(destination_table_name, destination_table_schema)
     except TableNotFoundError as e:
         if source_table_name in str(e):
-            raise TableNotFoundError(f"جدول مبدا '{source_table_name}' در اسکیما '{source_table_schema}' یافت نشد")
+            raise TableNotFoundError(f"جدول مبدا '{source_table_name}' یافت نشد")
         else:
-            raise TableNotFoundError(f"جدول مقصد '{destination_table_name}' در اسکیما '{destination_table_schema}' یافت نشد")
+            raise TableNotFoundError(f"جدول مقصد '{destination_table_name}' یافت نشد")
     
     # Create lookup dictionaries for faster access
     source_column_lookup = {col['name']: col for col in source_columns}
@@ -209,3 +200,208 @@ def validate_cadaster_column_mapping(
         'unmapped_destination_columns': [col['name'] for col in unmapped_destination_columns],
         'general_warnings': list(set(warnings))  # Remove duplicates
     }
+
+
+def import_cadaster_data(
+    source_table_name: str,
+    source_table_schema: str,
+    matched_fields: List[Dict[str, str]],
+    pelak_id: str
+) -> Dict[str, Any]:
+    """
+    Import data from source table to Cadaster model.
+    
+    Args:
+        source_table_name: Name of the source table
+        source_table_schema: Schema of the source table
+        matched_fields: List of column mappings
+        pelak_id: ID of the Pelak to associate with
+        
+    Returns:
+        Dictionary with import results
+        
+    Raises:
+        CadasterImportError: When import fails
+        TableNotFoundError: When source table is not found
+    """
+    from landreg.models import Cadaster, Pelak
+    
+    # Protected fields that should never be imported
+    PROTECTED_FIELDS = {'id' , 'status', 'change_status_date', 'change_status_by', 'pelak', 'id', 'created_at', 'updated_at'}
+    
+    # Validate pelak exists
+    try:
+        pelak = Pelak.objects.get(pk=pelak_id)
+    except Pelak.DoesNotExist:
+        raise CadasterImportError(f"پلاک با شناسه '{pelak_id}' یافت نشد")
+    
+    # Create field mapping (excluding protected fields)
+    field_mapping = {}
+    for mapping in matched_fields:
+        source_col = mapping.get('old_cadaster_col')
+        dest_col = mapping.get('landreg_cadaster_col')
+        
+        # Skip protected fields
+        if dest_col in PROTECTED_FIELDS:
+            continue
+            
+        field_mapping[dest_col] = source_col
+    
+    # Always map geometry to border (mandatory and automatic)
+    field_mapping['border'] = 'geometry'
+    
+    # Get data from source table
+    engine = create_new_database_engine()
+    
+    try:
+        # Build SELECT query dynamically
+        source_columns = list(field_mapping.values())
+        columns_str = ', '.join([f'"{col}"' for col in source_columns])
+        
+        # Get geometry as GeoJSON for proper conversion
+        geometry_col = field_mapping['border']
+        columns_str = columns_str.replace(f'"{geometry_col}"', f'ST_AsGeoJSON("{geometry_col}") as geometry_geojson')
+        
+        query = text(f"""
+            SELECT {columns_str}
+            FROM "{source_table_schema}"."{source_table_name}"
+        """)
+        
+        with engine.connect() as conn:
+            result = conn.execute(query)
+            rows = result.fetchall()
+            column_names = result.keys()
+        
+        if not rows:
+            raise CadasterImportError(f"جدول '{source_table_name}' خالی است")
+        
+        # Import data - all or nothing approach
+        imported_count = 0
+        errors = []
+        cadaster_instances = []
+        
+        # First pass: validate and prepare all rows
+        for row_index, row in enumerate(rows):
+            try:
+                # column headers are separate from the row data.
+                # create dictionary with column_name as a [key] and databaseValue for this column as [value]
+                row_dict = dict(zip(column_names, row))
+                
+                # Prepare cadaster data
+                cadaster_data = {
+                    'pelak': pelak,
+                    'status': 5  # Default: بدون تصمیم
+                }
+                
+                # Map fields
+                for dest_field, source_field in field_mapping.items():
+                    # Geometry -> border
+                    if dest_field == 'border':
+                        # Handle geometry field
+                        geometry_geojson = row_dict.get('geometry_geojson')
+                        if geometry_geojson:
+                            try:
+                                # Convert GeoJSON to GEOS geometry
+                                geom = GEOSGeometry(geometry_geojson)
+                                # Ensure it's MultiPolygon
+                                if geom.geom_type == 'Polygon':
+                                    from django.contrib.gis.geos import MultiPolygon
+                                    geom = MultiPolygon(geom)
+                                cadaster_data['border'] = geom
+                            except Exception as e:
+                                raise ValueError(f"خطا در تبدیل هندسه: {e}")
+                        else:
+                            raise ValueError("فیلد هندسه خالی است")
+                    else:
+                        # Handle regular fields
+                        value = row_dict.get(source_field)
+                        
+                        # Validate and handle choice fields
+                        if dest_field == 'project_name': # If not valid (leave it empty) !!!
+                            valid_project_names = [choice[0] for choice in Cadaster.PROJECT_NAME_CHOICES]
+                            if value and value in valid_project_names:
+                                cadaster_data[dest_field] = value
+                        elif dest_field == 'nezarat_type': # If not valid (leave it empty) !!!
+                            valid_nezarat_types = [choice[0] for choice in Cadaster.NEZARAT_TYPE_CHOICES]
+                            if value and value in valid_nezarat_types:
+                                cadaster_data[dest_field] = value
+                        elif dest_field == 'ownership_kinde': # If not valid (leave it empty) !!!
+                            valid_ownership_types = [choice[0] for choice in Cadaster.OWNERSHIP_CHOICES]
+                            if value and value in valid_ownership_types:
+                                cadaster_data[dest_field] = value
+                        # Handle ForeignKey fields
+                        elif dest_field == 'irrigation_type_id':
+                            dest_field = 'irrigation_type'
+                            if value: # check exist with this id If not exist (leave it empty) !!!
+                                try:
+                                    from landreg.models.cadaster import IrrigationTypDomain
+                                    cadaster_data[dest_field] = IrrigationTypDomain.objects.get(id=int(value))
+                                except (IrrigationTypDomain.DoesNotExist, ValueError):
+                                    cadaster_data[dest_field] = None
+                            else:
+                                cadaster_data[dest_field] = None
+                        elif dest_field == 'land_use_id':
+                            dest_field = 'land_use'
+                            if value: # check exist with this id If not exist (leave it empty) !!!
+                                try:
+                                    from landreg.models.cadaster import LandUseDomain
+                                    cadaster_data[dest_field] = LandUseDomain.objects.get(id=int(value))
+                                except (LandUseDomain.DoesNotExist, ValueError):
+                                    cadaster_data[dest_field] = None
+                            else:
+                                cadaster_data[dest_field] = None
+                        else:
+                            cadaster_data[dest_field] = value
+                
+                # Create Cadaster instance and validate
+                cadaster = Cadaster(**cadaster_data)
+                cadaster.full_clean()  # Validate before saving
+                cadaster_instances.append(cadaster)
+                
+            except Exception as e:
+                errors.append({
+                    'row_index': row_index,
+                    'error': str(e),
+                    # 'row_data': {k: str(v)[:100] for k, v in row_dict.items()}  # Limit data size
+                })
+        
+        # If any errors occurred, don't import anything
+        if errors:
+            return {
+                'success': False,
+                'imported_count': 0,
+                'failed_count': len(errors),
+                'total_rows': len(rows),
+                'errors': errors[:10],  # Return first 10 errors
+                'has_more_errors': len(errors) > 10,
+                'message': 'هیچ ردیفی وارد نشد زیرا برخی از ردیف‌ها دارای خطا بودند'
+            }
+        
+        # Second pass: save all rows in a transaction (all or nothing)
+        try:
+            with transaction.atomic():
+                for cadaster in cadaster_instances:
+                    cadaster.save()
+                    imported_count += 1
+            
+            return {
+                'success': True,
+                'imported_count': imported_count,
+                'failed_count': 0,
+                'total_rows': len(rows),
+                'errors': [],
+                'has_more_errors': False
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'imported_count': 0,
+                'failed_count': len(rows),
+                'total_rows': len(rows),
+                'errors': [{'error': f'خطا در ذخیره‌سازی داده‌ها: {str(e)}'}],
+                'has_more_errors': False,
+                'message': 'هیچ ردیفی وارد نشد به دلیل خطا در ذخیره‌سازی'
+            }
+        
+    except Exception as e:
+        raise CadasterImportError(f"خطا در import داده‌ها: {e}")
