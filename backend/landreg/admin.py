@@ -80,7 +80,7 @@ class CadasterAdmin(LeafletGeoAdmin):
     list_filter = [
         'project_name', 'status', 'land_use', 'irrigation_type'
     ]
-    autocomplete_fields = ['pelak', 'land_use', 'irrigation_type']
+    autocomplete_fields = ['land_use', 'irrigation_type']
 
     fieldsets = (
         ("اطلاعات کاداستر", {
@@ -103,7 +103,7 @@ class CadasterAdmin(LeafletGeoAdmin):
             "fields":("nezarat_type","nezart_verify_date","project_name")
         }),
         ("موقعیت و مرز", {
-            "fields": ("pelak","status","border")
+            "fields": ("status","border")
         }),
     )
 

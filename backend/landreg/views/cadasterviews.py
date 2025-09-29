@@ -493,7 +493,6 @@ class OldCadasterDetailsApiView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-
 class CadasterListApiView(APIView):
     """
         - GET (Read from Vector Tile Service Not Handle by Django)
@@ -771,18 +770,11 @@ class CadasterImportAPIView(APIView):
         source_table_name = request.data.get("source_table_name")
         source_table_schema = request.data.get("source_table_schema", "public")
         matched_fields = request.data.get("matched_fields", [])
-        pelak_id = request.data.get("pelak_id")
         
         # Validation
         if not source_table_name:
             return Response(
                 {"error": "نام جدول مبدا (source_table_name) الزامی است"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if not pelak_id:
-            return Response(
-                {"error": "شناسه پلاک (pelak_id) الزامی است"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -819,7 +811,6 @@ class CadasterImportAPIView(APIView):
                 source_table_name,
                 source_table_schema,
                 matched_fields,
-                pelak_id
             )
             
             # Check if import was successful
@@ -847,12 +838,18 @@ class CadasterImportAPIView(APIView):
             return Response(response_data, status=status.HTTP_201_CREATED)
             
         except CadasterImportError as e:
+            import traceback
+            print(traceback.format_exc())
+
             return Response(
                 {"error": str(e)}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
             
         except TableNotFoundError as e:
+            import traceback
+            print(traceback.format_exc())
+            
             return Response(
                 {"error": str(e)}, 
                 status=status.HTTP_404_NOT_FOUND

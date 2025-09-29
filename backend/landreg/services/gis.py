@@ -181,12 +181,6 @@ def process_pelak_border(
             except Exception as e:
                 print(f"Warning: Failed to clean up temporary directory: {e}")
 
-
-
-
-
-
-
 def get_layersnames_from_zipped_geodatabase(
   gdb_zip_file:InMemoryUploadedFile,   
 ) -> List[str]:

@@ -226,15 +226,6 @@ class Cadaster(CustomModel):
         null=True
     )
 
-    pelak = models.ForeignKey(
-        'landreg.Pelak',
-        on_delete=models.CASCADE,
-        related_name="rpelakcadasters",
-        verbose_name="پلاک",
-        blank=False,
-        null=False
-    )
-
     def __str__(self):
         return f"{self.uniquecode}"
 
@@ -246,7 +237,6 @@ class Cadaster(CustomModel):
             models.Index(fields=['plak_asli', 'plak_farei']),
             models.Index(fields=['national_code']),
             models.Index(fields=['bakhsh_sabti', 'nahiye_sabti']),
-            models.Index(fields=['pelak']),
         ]
 
 

@@ -206,7 +206,6 @@ def import_cadaster_data(
     source_table_name: str,
     source_table_schema: str,
     matched_fields: List[Dict[str, str]],
-    pelak_id: str
 ) -> Dict[str, Any]:
     """
     Import data from source table to Cadaster model.
@@ -228,12 +227,6 @@ def import_cadaster_data(
     
     # Protected fields that should never be imported
     PROTECTED_FIELDS = {'id' , 'status', 'change_status_date', 'change_status_by', 'pelak', 'id', 'created_at', 'updated_at'}
-    
-    # Validate pelak exists
-    try:
-        pelak = Pelak.objects.get(pk=pelak_id)
-    except Pelak.DoesNotExist:
-        raise CadasterImportError(f"پلاک با شناسه '{pelak_id}' یافت نشد")
     
     # Create field mapping (excluding protected fields)
     field_mapping = {}
@@ -288,9 +281,8 @@ def import_cadaster_data(
                 row_dict = dict(zip(column_names, row))
                 
                 # Prepare cadaster data
-                cadaster_data = {
-                    'pelak': pelak,
-                    'status': 5  # Default: بدون تصمیم
+                cadaster_data:dict[str,Any] = {
+                    'status': 5,  # Default: بدون تصمیم
                 }
                 
                 # Map fields
