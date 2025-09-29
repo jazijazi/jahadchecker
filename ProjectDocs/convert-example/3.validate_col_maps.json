@@ -8,8 +8,16 @@
   "source_table_schema":"public",
   "matched_fields":[
     {
-      "old_cadaster_col":"weigt",
-      "landreg_cadaster_col":"jaam_code"
+      "old_cadaster_col":"<col name>",
+      "landreg_cadaster_col":"<col name>"
+    },
+    {
+      "old_cadaster_col":"<col name>",
+      "landreg_cadaster_col":"<col name>"
+    },
+    {
+      "old_cadaster_col":"<col name>",
+      "landreg_cadaster_col":"<col name>"
     }
   ]
 }

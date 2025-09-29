@@ -1,0 +1,170 @@
+// url -->> http://localhost:8000/api/landreg/cadasterimport/
+
+// request body in json format
+{
+  "source_table_name":"plpwer_f4a33100",
+  "source_table_schema":"public",
+  "matched_fields":[
+    {
+      "old_cadaster_col":"<a colname>",
+      "landreg_cadaster_col":"<a colname>"
+    },
+     {
+      "old_cadaster_col":"<a colname>",
+      "landreg_cadaster_col":"<a colname>"
+    },
+    {
+      "old_cadaster_col":"<a colname>",
+      "landreg_cadaster_col":"<a colname>"
+    },
+    {
+      "old_cadaster_col":"<a colname>",
+      "landreg_cadaster_col":"<a colname>"
+    }
+
+  ]
+}
+// response body
+{
+  "source_table": {
+    "name": "newkadaster_3d60c45d",
+    "schema": "public",
+    "total_columns": 6
+  },
+  "destination_table": {
+    "name": "landreg_cadaster",
+    "schema": "public",
+    "total_columns": 20
+  },
+  "mapping_summary": {
+    "total_mappings": 5,
+    "valid_mappings": 5,
+    "invalid_mappings": 0,
+    "mappings_with_warnings": 4,
+    "unmapped_source_columns": 1,
+    "unmapped_destination_columns": 15
+  },
+  "valid_mappings": [
+    {
+      "index": 0,
+      "old_cadaster_col": "unikode",
+      "landreg_cadaster_col": "uniquecode",
+      "errors": [],
+      "warnings": [
+        "نگاشت از ستون قابل null به ستون غیر قابل null (مقادیر NULL باعث خطا خواهند شد)"
+      ],
+      "source_column_info": {
+        "name": "unikode",
+        "type": "text",
+        "nullable": true
+      },
+      "destination_column_info": {
+        "name": "uniquecode",
+        "type": "character varying",
+        "nullable": false
+      }
+    },
+    {
+      "index": 1,
+      "old_cadaster_col": "jammcode",
+      "landreg_cadaster_col": "jaam_code",
+      "errors": [],
+      "warnings": [
+        "عدم تطابق نوع داده: مبدا 'bigint' -> مقصد 'character varying'"
+      ],
+      "source_column_info": {
+        "name": "jammcode",
+        "type": "bigint",
+        "nullable": true
+      },
+      "destination_column_info": {
+        "name": "jaam_code",
+        "type": "character varying",
+        "nullable": true
+      }
+    },
+    {
+      "index": 2,
+      "old_cadaster_col": "plkasli",
+      "landreg_cadaster_col": "plak_asli",
+      "errors": [],
+      "warnings": [
+        "عدم تطابق نوع داده: مبدا 'bigint' -> مقصد 'character varying'"
+      ],
+      "source_column_info": {
+        "name": "plkasli",
+        "type": "bigint",
+        "nullable": true
+      },
+      "destination_column_info": {
+        "name": "plak_asli",
+        "type": "character varying",
+        "nullable": true
+      }
+    },
+    {
+      "index": 3,
+      "old_cadaster_col": "plkfari",
+      "landreg_cadaster_col": "plak_farei",
+      "errors": [],
+      "warnings": [
+        "عدم تطابق نوع داده: مبدا 'bigint' -> مقصد 'character varying'"
+      ],
+      "source_column_info": {
+        "name": "plkfari",
+        "type": "bigint",
+        "nullable": true
+      },
+      "destination_column_info": {
+        "name": "plak_farei",
+        "type": "character varying",
+        "nullable": true
+      }
+    },
+    {
+      "index": 4,
+      "old_cadaster_col": "nshnalkode",
+      "landreg_cadaster_col": "national_code",
+      "errors": [],
+      "warnings": [],
+      "source_column_info": {
+        "name": "nshnalkode",
+        "type": "text",
+        "nullable": true
+      },
+      "destination_column_info": {
+        "name": "national_code",
+        "type": "character varying",
+        "nullable": true
+      }
+    }
+  ],
+  "invalid_mappings": [],
+  "unmapped_source_columns": [
+    "OBJECTID"
+  ],
+  "unmapped_destination_columns": [
+    "plak_name",
+    "bakhsh_sabti",
+    "nahiye_sabti",
+    "area",
+    "owner_name",
+    "owner_lastname",
+    "fathername",
+    "mobile",
+    "ownership_kinde",
+    "consulate_name",
+    "nezarat_type",
+    "project_name",
+    "nezart_verify_date",
+    "irrigation_type_id",
+    "land_use_id"
+  ],
+  "general_warnings": [
+    "نگاشت از ستون قابل null به ستون غیر قابل null (مقادیر NULL باعث خطا خواهند شد)",
+    "عدم تطابق نوع داده: مبدا 'bigint' -> مقصد 'character varying'"
+  ],
+  "status_code": 0,
+  "status": "validation_passed_with_warnings",
+  "message": "نگاشت‌های ستون معتبر هستند اما دارای هشدار می‌باشند"
+}
