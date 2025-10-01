@@ -70,7 +70,8 @@ class Cadaster(CustomModel):
         srid=4326,
         blank=False,
         null=False,
-        verbose_name="مرز"
+        verbose_name="مرز",
+        spatial_index=True,
     )
     uniquecode = models.CharField(
         verbose_name="کد یکتا",
@@ -237,6 +238,7 @@ class Cadaster(CustomModel):
             models.Index(fields=['plak_asli', 'plak_farei']),
             models.Index(fields=['national_code']),
             models.Index(fields=['bakhsh_sabti', 'nahiye_sabti']),
+            models.Index(fields=['status']),  # Index for status filtering
         ]
 
 

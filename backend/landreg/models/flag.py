@@ -21,7 +21,8 @@ class Flag(CustomModel):
         blank=False,
         null=False,
         verbose_name="موقعیت نقطه",
-        help_text="موقعیت جغرافیایی نقطه فلگ"
+        help_text="موقعیت جغرافیایی نقطه فلگ",
+        spatial_index=True,
     )
     
     createdby = models.ForeignKey(

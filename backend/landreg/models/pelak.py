@@ -60,7 +60,8 @@ class Pelak(CustomModel):
     border = gis_models.MultiPolygonField(
         srid=4326,
         blank=False,
-        null=False
+        null=False,
+        spatial_index=True,
     )
     @property
     def is_verified(self):
