@@ -28,11 +28,13 @@ from landreg.services.convert_service import (
     get_status_code,
     import_cadaster_data,
 )
+from geoserverapp.services.geoserver_service import GeoServerService
 from landreg.exceptions import (
     TableNotFoundError,
     GeoDatabaseValidationError,
     CadasterImportError
 )
+from django.conf import settings
 from landreg.models.flag import Flag
 from landreg.models.cadaster import Cadaster , OldCadasterData
 from common.models import Company , Province
@@ -109,8 +111,17 @@ class UploadOldCadasterFromShapefileApiView(APIView):
                 return None, "شرکت شما به هیچ استانی متصل نیست"
             return province, ""   
         
+    def _cleanup(self , tablenames:List[str]):
+        if len(tablenames)>0:
+            for t_name in tablenames:
+                drop_table_if_exists(t_name)
+                if OldCadasterData.objects.filter(table_name=t_name).exists():
+                    OldCadasterData.objects.filter(table_name=t_name).first().delete()
 
     def post(self , request:Request) -> Response:
+        created_oldcadasterdata : List[OldCadasterData] = []
+        published_tablename : List[str] = []
+
         try:
             user:User = request.user
             
@@ -137,7 +148,6 @@ class UploadOldCadasterFromShapefileApiView(APIView):
             result:List[ProcessResult] = process_shp_file(
                 shpzipfile=validated_data['file']
             )
-            created_oldcadasterdata : List[OldCadasterData] = []
 
             for res in result:
                 oldcadasterdata_new_instance = OldCadasterData.objects.create(
@@ -147,15 +157,30 @@ class UploadOldCadasterFromShapefileApiView(APIView):
                 )
                 created_oldcadasterdata.append(oldcadasterdata_new_instance)
 
+            geoserver_service = GeoServerService()
+            if len(created_oldcadasterdata) > 0:
+                for c_old in created_oldcadasterdata:
+                    pub_res = geoserver_service.pulish_layer(
+                        workspace=settings.GEOSERVER['DEFAULT_WORKSPACE'],
+                        store_name=settings.GEOSERVER['DEFAULT_STORE'],
+                        pg_table=c_old.table_name,
+                        title=c_old.table_name,
+                    )
+                    if pub_res.get("status",400) == 201:
+                        published_tablename.append(c_old.table_name)
+
+
             output_serializer = self.UploadOldCadasterFromShapefileOutputSerializer(created_oldcadasterdata,many=True)
             return Response(output_serializer.data , status=status.HTTP_201_CREATED)
             
         except GeoDatabaseValidationError as gdderr:
+            self._cleanup(tablenames = published_tablename)
             return Response({"detail": f"{str(gdderr)}"}, status=status.HTTP_400_BAD_REQUEST)
         except FileNotFoundError as ferr:
-            # self._cleanup(tablenames=name_layers_en_after_clean)
+            self._cleanup(tablenames = published_tablename)
             return Response({"detail": f"{str(ferr)}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
+            self._cleanup(tablenames = published_tablename)
             print(f"Error creating cadaster via shpfile: {str(e)}")
             return Response(
                 {"detail": "خطا در بارگذاری دیتای قدیمی "}, 
@@ -243,8 +268,16 @@ class UploadOldCadasterFromGdbApiView(APIView):
                 return None, "شرکت شما به هیچ استانی متصل نیست"
             return province, ""
             
-
+    def _cleanup(self , tablenames:List[str]):
+        if len(tablenames)>0:
+            for t_name in tablenames:
+                drop_table_if_exists(t_name)
+                if OldCadasterData.objects.filter(table_name=t_name).exists():
+                    OldCadasterData.objects.filter(table_name=t_name).first().delete()
+        
     def post(self, request:Request) -> Response:
+        created_oldcadasterdata : List[OldCadasterData] = []
+        published_tablename : List[str] = []
         try:
             user:User = request.user
             
@@ -273,7 +306,6 @@ class UploadOldCadasterFromGdbApiView(APIView):
                 selectedlayers = input_serializer.validated_data.get('selectedlayers')
             )
             
-            created_oldcadasterdata : List[OldCadasterData] = []
 
             for res in result:
                 oldcadasterdata_new_instance = OldCadasterData.objects.create(
@@ -283,6 +315,18 @@ class UploadOldCadasterFromGdbApiView(APIView):
                 )
                 created_oldcadasterdata.append(oldcadasterdata_new_instance)
 
+            geoserver_service = GeoServerService()
+            if len(created_oldcadasterdata) > 0:
+                for c_old in created_oldcadasterdata:
+                    pub_res = geoserver_service.pulish_layer(
+                        workspace=settings.GEOSERVER['DEFAULT_WORKSPACE'],
+                        store_name=settings.GEOSERVER['DEFAULT_STORE'],
+                        pg_table=c_old.table_name,
+                        title=c_old.table_name,
+                    )
+                    if pub_res.get("status",400) == 201:
+                        published_tablename.append(c_old.table_name)
+
             output_serializer = self.UploadOldCadasterFromGdbOutputSerializer(created_oldcadasterdata,many=True)
             return Response(output_serializer.data , status=status.HTTP_201_CREATED)
 
@@ -290,9 +334,10 @@ class UploadOldCadasterFromGdbApiView(APIView):
             return Response({"detail": f"{str(gdderr)}"}, status=status.HTTP_400_BAD_REQUEST)
 
         except FileNotFoundError as ferr:
-            # self._cleanup(tablenames=name_layers_en_after_clean)
+            self._cleanup(tablenames = published_tablename)
             return Response({"detail": f"{str(ferr)}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
+            self._cleanup(tablenames = published_tablename)
             print(f"Error creating cadaster via Geodatabase: {str(e)}")
             return Response(
                 {"detail": "خطا در بارگذاری دیتای قدیمی "}, 
