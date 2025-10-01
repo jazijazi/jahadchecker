@@ -21,6 +21,7 @@ from landreg.views.cadasterviews import (
 from landreg.views.reportviews import (
     CadaterStatusByProvince,
     FlagStatusByProvince,
+    DiffCadasterAndFlagStatusByProvince
 )
 
 
@@ -44,5 +45,6 @@ urlpatterns = [
 
     path('cadaterstatusbyprovince/<int:provinceid>/', CadaterStatusByProvince.as_view(), name='report-cadastersatus-by-province'),    
     path('flagstatusbyprovince/<int:provinceid>/', FlagStatusByProvince.as_view(), name='report-flagsatus-by-province'),    
+    path('diffcadasterflagstatusbyprovince/<int:provinceid>/', DiffCadasterAndFlagStatusByProvince.as_view(), name='report-cadasterflag-diff-satus-by-province'),    
     
 ]
