@@ -282,7 +282,7 @@ def import_cadaster_data(
                 
                 # Prepare cadaster data
                 cadaster_data:dict[str,Any] = {
-                    'status': 5,  # Default: بدون تصمیم
+                    'status': 0,  # Default: بدون تصمیم
                 }
                 
                 # Map fields
@@ -309,41 +309,42 @@ def import_cadaster_data(
                         value = row_dict.get(source_field)
                         
                         # Validate and handle choice fields
-                        if dest_field == 'project_name': # If not valid (leave it empty) !!!
-                            valid_project_names = [choice[0] for choice in Cadaster.PROJECT_NAME_CHOICES]
-                            if value and value in valid_project_names:
-                                cadaster_data[dest_field] = value
-                        elif dest_field == 'nezarat_type': # If not valid (leave it empty) !!!
-                            valid_nezarat_types = [choice[0] for choice in Cadaster.NEZARAT_TYPE_CHOICES]
-                            if value and value in valid_nezarat_types:
-                                cadaster_data[dest_field] = value
-                        elif dest_field == 'ownership_kinde': # If not valid (leave it empty) !!!
-                            valid_ownership_types = [choice[0] for choice in Cadaster.OWNERSHIP_CHOICES]
-                            if value and value in valid_ownership_types:
-                                cadaster_data[dest_field] = value
-                        # Handle ForeignKey fields
-                        elif dest_field == 'irrigation_type_id':
-                            dest_field = 'irrigation_type'
-                            if value: # check exist with this id If not exist (leave it empty) !!!
-                                try:
-                                    from landreg.models.cadaster import IrrigationTypDomain
-                                    cadaster_data[dest_field] = IrrigationTypDomain.objects.get(id=int(value))
-                                except (IrrigationTypDomain.DoesNotExist, ValueError):
-                                    cadaster_data[dest_field] = None
-                            else:
-                                cadaster_data[dest_field] = None
-                        elif dest_field == 'land_use_id':
-                            dest_field = 'land_use'
-                            if value: # check exist with this id If not exist (leave it empty) !!!
-                                try:
-                                    from landreg.models.cadaster import LandUseDomain
-                                    cadaster_data[dest_field] = LandUseDomain.objects.get(id=int(value))
-                                except (LandUseDomain.DoesNotExist, ValueError):
-                                    cadaster_data[dest_field] = None
-                            else:
-                                cadaster_data[dest_field] = None
-                        else:
-                            cadaster_data[dest_field] = value
+                        # if dest_field == 'project_name': # If not valid (leave it empty) !!!
+                        #     valid_project_names = [choice[0] for choice in Cadaster.PROJECT_NAME_CHOICES]
+                        #     if value and value in valid_project_names:
+                        #         cadaster_data[dest_field] = value
+                        # elif dest_field == 'nezarat_type': # If not valid (leave it empty) !!!
+                        #     valid_nezarat_types = [choice[0] for choice in Cadaster.NEZARAT_TYPE_CHOICES]
+                        #     if value and value in valid_nezarat_types:
+                        #         cadaster_data[dest_field] = value
+                        # elif dest_field == 'ownership_kinde': # If not valid (leave it empty) !!!
+                        #     valid_ownership_types = [choice[0] for choice in Cadaster.OWNERSHIP_CHOICES]
+                        #     if value and value in valid_ownership_types:
+                        #         cadaster_data[dest_field] = value
+                        # # Handle ForeignKey fields
+                        # elif dest_field == 'irrigation_type_id':
+                        #     dest_field = 'irrigation_type'
+                        #     if value: # check exist with this id If not exist (leave it empty) !!!
+                        #         try:
+                        #             from landreg.models.cadaster import IrrigationTypDomain
+                        #             cadaster_data[dest_field] = IrrigationTypDomain.objects.get(id=int(value))
+                        #         except (IrrigationTypDomain.DoesNotExist, ValueError):
+                        #             cadaster_data[dest_field] = None
+                        #     else:
+                        #         cadaster_data[dest_field] = None
+                        # elif dest_field == 'land_use_id':
+                        #     dest_field = 'land_use'
+                        #     if value: # check exist with this id If not exist (leave it empty) !!!
+                        #         try:
+                        #             from landreg.models.cadaster import LandUseDomain
+                        #             cadaster_data[dest_field] = LandUseDomain.objects.get(id=int(value))
+                        #         except (LandUseDomain.DoesNotExist, ValueError):
+                        #             cadaster_data[dest_field] = None
+                        #     else:
+                        #         cadaster_data[dest_field] = None
+                        # else:
+                        #     cadaster_data[dest_field] = value
+                        cadaster_data[dest_field] = value
                 
                 # Create Cadaster instance and validate
                 cadaster = Cadaster(**cadaster_data)

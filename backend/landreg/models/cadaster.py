@@ -7,50 +7,21 @@ from django.core.exceptions import ValidationError
 from common.models import CustomModel , Province
 from accounts.models import User
 
-class LandUseDomain(CustomModel):
-    title = models.CharField(
-        verbose_name="عنوان",
-        max_length=100,
-        blank=False,
-        null=False,
-    )
-    def __str__(self):
-        return f"{self.title}"
-
-    class Meta:
-        verbose_name = "نوع کاربری"
-        verbose_name_plural = "انواع کاربری"
-
-class IrrigationTypDomain(CustomModel):
-    title = models.CharField(
-        verbose_name="عنوان",
-        max_length=100,
-        blank=False,
-        null=False,
-    )
-    def __str__(self):
-        return f"{self.title}"
-
-    class Meta:
-        verbose_name = "نوع آبیاری"
-        verbose_name_plural = "انواع آبیاری"
-
-
 class Cadaster(CustomModel):
-    PROJECT_NAME_CHOICES = [
-        ('امور اراضی', 'امور اراضی'),
-        ('دریاچه', 'دریاچه'),
-        ('رودخانه مرزی', 'رودخانه مرزی'),
-    ]
-    OWNERSHIP_CHOICES = [
-        ('ششدانگ', 'ششدانگ'),
-        ('مشاع', 'مشاع'),
-    ]
-    NEZARAT_TYPE_CHOICES = [
-        ('سازمان نقشه برداری', 'سازمان نقشه برداری'),
-        ('شمیم', 'شمیم'),
-        ('ارتوی دارای تایید', 'ارتوی دارای تایید'),
-    ]
+    # PROJECT_NAME_CHOICES = [
+    #     ('امور اراضی', 'امور اراضی'),
+    #     ('دریاچه', 'دریاچه'),
+    #     ('رودخانه مرزی', 'رودخانه مرزی'),
+    # ]
+    # OWNERSHIP_CHOICES = [
+    #     ('ششدانگ', 'ششدانگ'),
+    #     ('مشاع', 'مشاع'),
+    # ]
+    # NEZARAT_TYPE_CHOICES = [
+    #     ('سازمان نقشه برداری', 'سازمان نقشه برداری'),
+    #     ('شمیم', 'شمیم'),
+    #     ('ارتوی دارای تایید', 'ارتوی دارای تایید'),
+    # ]
     cadaster_status = [
         (0 , 'پیش فرض'),
         (1 , 'قطعات بدون تغییر در محدوده'),
@@ -76,15 +47,15 @@ class Cadaster(CustomModel):
     uniquecode = models.CharField(
         verbose_name="کد یکتا",
         max_length=100,
-        unique=True,
-        blank=False,
-        null=False,
+        unique=False,
+        blank=True,
+        null=True,
     )
     jaam_code = models.CharField(
         verbose_name="کد جام",
         max_length=100,
-        blank=True,
-        null=True,
+        blank=False,
+        null=False,
         validators=only_digit_validators,
     )
     plak_name = models.CharField(
@@ -159,7 +130,7 @@ class Cadaster(CustomModel):
     ownership_kinde = models.CharField(
         verbose_name="نوع مالکیت",
         max_length=20,
-        choices=OWNERSHIP_CHOICES,
+        # choices=OWNERSHIP_CHOICES,
         blank=True,
         null=True,
     )
@@ -172,7 +143,7 @@ class Cadaster(CustomModel):
     nezarat_type = models.CharField(
         verbose_name="نوع نظارت",
         max_length=50,
-        choices=NEZARAT_TYPE_CHOICES,
+        # choices=NEZARAT_TYPE_CHOICES,
         blank=True,
         null=True
     )
@@ -180,12 +151,13 @@ class Cadaster(CustomModel):
     project_name = models.CharField(
         verbose_name="نام پروژه",
         max_length=50,
-        choices=PROJECT_NAME_CHOICES,
+        # choices=PROJECT_NAME_CHOICES,
         blank=True,
         null=True
     )
-    nezart_verify_date = models.DateTimeField(
+    nezart_verify_date = models.CharField(
         verbose_name="تاریخ تایید نظارت",
+        max_length=50,
         blank=True,
         null=True
     )
@@ -198,31 +170,29 @@ class Cadaster(CustomModel):
         default=5
     )
     change_status_date = models.DateTimeField(
-        verbose_name="تاریخ تایید نظارت",
+        verbose_name="تاریخ تغییر وضعیت",
         blank=True,
         null=True
     )
     change_status_by = models.ForeignKey(
         User,
-        verbose_name="تغییر وضعیت داده شده توسط",
+        verbose_name="تغییر وضعیت داده شده در تاریخ",
         on_delete=models.SET_NULL,
         related_name="ruser_changestatusby",
         blank=True,
         null=True
     )
 
-    land_use = models.ForeignKey(
-        LandUseDomain,
-        on_delete=models.SET_NULL,
-        related_name="rlandusecadaster",
+    land_use = models.CharField(
+        verbose_name="نوع کاربری",
+        max_length=50,
         blank=True,
         null=True
     )
 
-    irrigation_type = models.ForeignKey(
-        IrrigationTypDomain,
-        on_delete=models.SET_NULL,
-        related_name="rirridationcadaster",
+    irrigation_type = models.CharField(
+        verbose_name="نام آبیاری",
+        max_length=150,
         blank=True,
         null=True
     )
