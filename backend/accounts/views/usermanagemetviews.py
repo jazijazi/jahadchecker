@@ -44,7 +44,7 @@ class UserManagementListApiView(APIView):
             provinces = UserManagementListOutputCompanyProvinces(many=True)
             class Meta:
                 model = Company
-                fields = ['id' , 'name' , 'typ' , 'provinces' , 'is_nazer' , 'is_supernazer' , 'is_moshaver']
+                fields = ['id' , 'name' , 'provinces' , 'is_nazer' , 'is_supernazer' , 'is_moshaver']
         roles = UserManagementListOutputRoles()
         company = UserManagementListOutputCompany()
         class Meta:
