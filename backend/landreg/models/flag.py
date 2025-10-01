@@ -3,7 +3,7 @@ from django.db import models
 from django.contrib.gis.db import models as gis_models
 from django.core.validators import RegexValidator
 from django.core.exceptions import ValidationError
-
+from django.core.exceptions import NON_FIELD_ERRORS
 from common.models import CustomModel
 from accounts.models import User
 
@@ -67,6 +67,57 @@ class Flag(CustomModel):
     def get_status_display_persian(self):
         """Get Persian display name for status"""
         return dict(self.FLAG_STATUS_CHOICES).get(self.status, 'نامشخص')
+    
+    def clean(self):
+        """Validate that the flag point intersects with the cadaster border"""
+        super().clean()
+        
+        # ----------- validate flag cadaster -----------
+        # Check if the point intersects with the cadaster's border
+        if self.border and self.cadaster:
+            if not self.cadaster.border.intersects(self.border):
+                raise ValidationError({
+                    'border': 'موقعیت فلگ باید در محدوده کاداستر مربوطه قرار داشته باشد'
+                })
+            
+        # ----------- validate flag user creator -----------
+        # Skip company and role checks for superusers
+        if self.createdby and self.createdby.is_superuser:
+            return
+    
+        # Validate user has a company (only for non-superusers)
+        if not self.createdby or not self.createdby.company:
+            raise ValidationError({
+                NON_FIELD_ERRORS: "کاربر نویسنده فلگ باید به یک شرکت متصل باشد"
+            })
+    
+        user_company = self.createdby.company
+    
+        # Build base queryset (exclude self if updating)
+        base_query = Flag.objects.filter(cadaster=self.cadaster)
+        if self.pk:
+            base_query = base_query.exclude(pk=self.pk)
+    
+        # Check nazer constraint
+        if user_company.is_nazer:
+            if base_query.filter(createdby__company__is_nazer=True).exists():
+                raise ValidationError({
+                    NON_FIELD_ERRORS: "فلگ روی این کاداستر قبلا توسط ناظر ثبت شده است"
+                })
+    
+        # Check supernazer constraint
+        if user_company.is_supernazer:
+            if base_query.filter(createdby__company__is_supernazer=True).exists():
+                raise ValidationError({
+                    NON_FIELD_ERRORS: "فلگ روی این کاداستر قبلا توسط ناظرعالی ثبت شده است"
+                })
+
+            
+    def save(self, *args, **kwargs):
+        """Override save to ensure validation runs"""
+        # Run full_clean to trigger clean() method
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = "فلگ"
