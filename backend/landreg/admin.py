@@ -4,8 +4,6 @@ from leaflet.admin import LeafletGeoAdmin
 
 from .models import Pelak
 from .models.cadaster import (
-    IrrigationTypDomain ,
-    LandUseDomain ,
     Cadaster ,
     OldCadasterData
 )
@@ -60,14 +58,6 @@ class PelakAdmin(LeafletGeoAdmin):
     is_verified.boolean = True
     is_verified.short_description = "Verified"
 
-class LandUseDomainAdmin(admin.ModelAdmin):
-    list_display = ['id', 'title']
-    search_fields = ['title']
-
-class IrrigationTypDomainAdmin(admin.ModelAdmin):
-    list_display = ['id', 'title']
-    search_fields = ['title']
-
 class CadasterAdmin(LeafletGeoAdmin):
     list_display = [
         'uniquecode', 'plak_name', 'plak_asli', 'plak_farei',
@@ -80,7 +70,6 @@ class CadasterAdmin(LeafletGeoAdmin):
     list_filter = [
         'project_name', 'status', 'land_use', 'irrigation_type'
     ]
-    autocomplete_fields = ['land_use', 'irrigation_type']
 
     fieldsets = (
         ("اطلاعات کاداستر", {
@@ -125,7 +114,7 @@ class FlagAdmin(LeafletGeoAdmin):
             "fields": ("border",)
         }),
         ("ثبت اطلاعات", {
-            "fields": ("createdby", "created_at", "updated_at")
+            "fields": ("createdby","change_status_at" ,"created_at", "updated_at")
         }),
     )
 
@@ -180,8 +169,6 @@ class OldCadasterDataAdmin(admin.ModelAdmin):
             )
     drop_selected_tables.short_description = "Drop database tables for selected records"
 
-admin.site.register(LandUseDomain , LandUseDomainAdmin)
-admin.site.register(IrrigationTypDomain , IrrigationTypDomainAdmin)
 
 admin.site.register(Pelak , PelakAdmin)
 admin.site.register(Cadaster , CadasterAdmin)

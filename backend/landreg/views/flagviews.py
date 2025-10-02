@@ -1,4 +1,5 @@
 import uuid
+from django.contrib.gis.geos import Point
 from typing import cast, Dict, Any
 from django.core.validators import FileExtensionValidator
 from rest_framework.response import Response
@@ -18,7 +19,13 @@ from landreg.models.flag import Flag
 from landreg.models.cadaster import Cadaster
 from common.models import Company , Province
 from accounts.models import User
+from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework.exceptions import ValidationError as DRFValidationError
 
+
+
+# TODO: flag edit status 
+# TODO: flag edit description
 
 class FlagListApiView(APIView):
     """
@@ -42,7 +49,7 @@ class FlagListApiView(APIView):
             model = Flag
             fields = ['id', 'createdby' , 'description' , 'cadaster' , 'status']
 
-    class FlagListInputSerializer(serializers.Serializer):
+    class FlagListInputSerializer(serializers.ModelSerializer):
         latitude = serializers.FloatField(
             required=True,
             error_messages={
@@ -69,16 +76,30 @@ class FlagListApiView(APIView):
         )
 
         def validate_latitude(self, value):
-            """Validate latitude is within valid range"""
             if not (-90 <= value <= 90):
                 raise serializers.ValidationError("عرض جغرافیایی باید بین -90 تا 90 باشد")
             return value
 
         def validate_longitude(self, value):
-            """Validate longitude is within valid range"""
             if not (-180 <= value <= 180):
                 raise serializers.ValidationError("طول جغرافیایی باید بین -180 تا 180 باشد")
             return value
+        
+        def create(self, validated_data):
+            latitude = validated_data.pop('latitude')
+            longitude = validated_data.pop('longitude')
+            point = Point(longitude, latitude, srid=4326)
+            
+            # Create flag with the point
+            validated_data['border'] = point
+            
+            # This will call full_clean() because of your save() override
+            return super().create(validated_data)
+            
+        class Meta:
+            model = Flag
+            # fields from model + write_only fields for lat/lon
+            fields = ['latitude', 'longitude', 'description', 'status']
 
     
     def _check_user_permissions(self, user: User) -> tuple[bool, str]:
@@ -122,7 +143,7 @@ class FlagListApiView(APIView):
         
     def post(self, request: Request , cadasterid:int) -> Response:
         try:
-            user:User = request.user
+            user: User = request.user
             
             has_permission, error_msg = self._check_user_permissions(user)
             if not has_permission:
@@ -141,24 +162,11 @@ class FlagListApiView(APIView):
             serializer = self.FlagListInputSerializer(data=request.data)
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-            validated_data = cast(Dict[str, Any], serializer.validated_data)
             
-            # Create Point geometry from latitude and longitude
-            from django.contrib.gis.geos import Point
-            point = Point(
-                validated_data['longitude'], 
-                validated_data['latitude'], 
-                srid=4326
-            )
-            
-            # Create the flag
-            flag = Flag.objects.create(
-                border=point,
+            # Save with additional fields
+            flag = serializer.save(
                 createdby=user,
-                description=validated_data.get('description', ''),
-                cadaster=cadaster_instance,
-                status=validated_data.get('status')
+                cadaster=cadaster_instance
             )
             
             # Return the created flag data
@@ -171,9 +179,30 @@ class FlagListApiView(APIView):
                 }, 
                 status=status.HTTP_201_CREATED
             )
+        
+        except DjangoValidationError as e:
+            # Convert Django ValidationError to DRF format
+            errors = {}
+            
+            if hasattr(e, 'message_dict'):
+                # Multiple field errors
+                for field, messages in e.message_dict.items():
+                    if field == '__all__':
+                        errors['non_field_errors'] = messages
+                    else:
+                        errors[field] = messages
+            elif hasattr(e, 'messages'):
+                # Single non-field error
+                errors['non_field_errors'] = e.messages
+            else:
+                # Fallback
+                errors['non_field_errors'] = [str(e)]
+            
+            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+                
         except Exception as e:
-            print(f"Error creating pelak: {str(e)}")
+            print(f"Error creating flag: {str(e)}")
             return Response(
-                {"detail": "خطا در خواندن لیست فلگ ها"}, 
+                {"detail": "خطا در ساخت فلگ جدید"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            ) 
+            )

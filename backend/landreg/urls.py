@@ -18,7 +18,11 @@ from landreg.views.cadasterviews import (
     CadasterColumnMappingValidateAPIView,
     CadasterImportAPIView,
 )
-
+from landreg.views.reportviews import (
+    CadaterStatusByProvince,
+    FlagStatusByProvince,
+    DiffCadasterAndFlagStatusByProvince
+)
 
 
 urlpatterns = [
@@ -38,5 +42,9 @@ urlpatterns = [
     path('tablecolumnnames/' , TableColumnNamesAPIView.as_view() , name="oldcadasterdata-tablename"),
     path('colmapvalidate/', CadasterColumnMappingValidateAPIView.as_view(), name='cadaster-column-mapping-validate'),
     path('cadasterimport/', CadasterImportAPIView.as_view(), name='cadaster-import'),
+
+    path('cadaterstatusbyprovince/<int:provinceid>/', CadaterStatusByProvince.as_view(), name='report-cadastersatus-by-province'),    
+    path('flagstatusbyprovince/<int:provinceid>/', FlagStatusByProvince.as_view(), name='report-flagsatus-by-province'),    
+    path('diffcadasterflagstatusbyprovince/<int:provinceid>/', DiffCadasterAndFlagStatusByProvince.as_view(), name='report-cadasterflag-diff-satus-by-province'),    
     
 ]
