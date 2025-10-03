@@ -78,7 +78,7 @@ class CompanyListApiView(APIView):
         
         class Meta:
             model = Company
-            fields = ['id', 'name', 'provinces', 'is_nazer', 'is_supernazer', 'is_moshaver']
+            fields = ['id', 'name','callnumber', 'address', 'comment', 'provinces', 'is_nazer', 'is_supernazer', 'is_moshaver']
 
     def get(self , request:Request) -> Response:
         """
