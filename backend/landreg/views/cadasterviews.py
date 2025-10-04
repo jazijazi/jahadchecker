@@ -551,7 +551,61 @@ class CadasterDetailsApiView(APIView):
         - PUT
         - DELETE
     """
-    pass 
+    class CadasterDetailsInputSerializer(serializers.ModelSerializer):
+
+        class Meta:
+            model = Cadaster
+            fields = ['uniquecode','jaam_code','plak_name',
+                      'plak_asli','plak_farei','bakhsh_sabti',
+                      'nahiye_sabti','area','owner_name','owner_lastname',
+                      'fathername','national_code','mobile','ownership_kinde',
+                      'consulate_name','nezarat_type',
+                      'project_name','land_use','irrigation_type',
+                    ]
+    
+    class CadasterDetailsOuputSerializer(serializers.ModelSerializer):
+        class Meta:
+            model = Cadaster
+            fields = ['id','uniquecode','jaam_code','plak_name',
+                      'plak_asli','plak_farei','bakhsh_sabti',
+                      'nahiye_sabti','area','owner_name','owner_lastname',
+                      'fathername','national_code','mobile','ownership_kinde',
+                      'consulate_name','nezarat_type',
+                      'project_name','land_use','irrigation_type',
+                    ]
+            
+    def get(self , request:Request , cadasterid:int) -> Response:
+        try:
+            cadster_instance = Cadaster.objects.get(pk=cadasterid)
+            serializer = self.CadasterDetailsOuputSerializer(cadster_instance)
+            return Response(serializer.data , status=status.HTTP_200_OK)
+        except Cadaster.DoesNotExist:
+            return Response({"detail": f"کاداستر با این آیدی یافت نشد"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print(e)
+            return Response({"detail": f"خطا در خواندن کاداستری با این آیدی"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request: Request , cadasterid:int) -> Response:
+        try:
+            cadster_instance = Cadaster.objects.get(pk=cadasterid)
+            serializer = self.CadasterDetailsInputSerializer(
+                cadster_instance, 
+                data=request.data, 
+                partial=True  # Allow partial updates
+            )
+            if not serializer.is_valid():
+                return Response({"details": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            cadster_instance = serializer.save()
+            serializer = self.CadasterDetailsOuputSerializer(cadster_instance)
+            return Response(serializer.data , status=status.HTTP_200_OK)
+        except Cadaster.DoesNotExist:
+            return Response({"detail": f"کاداستر با این آیدی یافت نشد"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print(e)
+            return Response({"detail": f"خطا در ویرایش کاداستری با این آیدی"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
 
 class GetListLayersFromGeodbFile(APIView):
     """

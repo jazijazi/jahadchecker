@@ -9,6 +9,9 @@ from landreg.views.flagviews import (
 from landreg.views.cadasterviews import (
     UploadOldCadasterFromGdbApiView,
     UploadOldCadasterFromShapefileApiView,
+
+    CadasterDetailsApiView,
+
     OldCadasterListApiView,
     OldCadasterDetailsApiView,
 
@@ -29,6 +32,8 @@ urlpatterns = [
     path('pelak/',PelakListApiViews.as_view(),name="plak-list"),
 
     path('flag/<int:cadasterid>/',FlagListApiView.as_view(),name="flag-list"),
+
+    path('cadaster/<int:cadasterid>/' , CadasterDetailsApiView.as_view() , name="cadaster-details"),
 
     path('uploadoldcadasterfromshapefile/' , UploadOldCadasterFromShapefileApiView.as_view() , name="upload-oldcadasterdata-shp"),
     path('uploadoldcadasterfromgeodatabase/' , UploadOldCadasterFromGdbApiView.as_view() , name="upload-oldcadasterdata-gdb"),
