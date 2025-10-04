@@ -312,6 +312,7 @@ def process_shp_file(
         temp_dir = tempfile.mkdtemp()
         with zipfile.ZipFile(shpzipfile, 'r') as zip_ref:
             zip_ref.extractall(temp_dir)
+        
         shp_file = None
         extracted_files = os.listdir(temp_dir)
         for file in extracted_files:
@@ -339,7 +340,7 @@ def process_shp_file(
             raise Exception(f"لایه {layer_name} : {msg}")
         
         # read shapefile into gdf
-        gdf = gpd.read_file(shp_file)
+        gdf = gpd.read_file(shp_file , encoding='utf-8')
 
         # validate gdf
         ok, msg = validate_geodataframe(gdf=gdf)
