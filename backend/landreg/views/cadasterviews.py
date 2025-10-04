@@ -604,9 +604,6 @@ class CadasterDetailsApiView(APIView):
             print(e)
             return Response({"detail": f"خطا در ویرایش کاداستری با این آیدی"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
-
-
 class GetListLayersFromGeodbFile(APIView):
     """
     API to get all layers from zipped GeoDatabase 

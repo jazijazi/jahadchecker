@@ -8,4 +8,4 @@ class AccountsConfig(AppConfig):
     def ready(self):
         # This will register the extension
         from .spectacular_extensions import JWTAuthenticationExtension
-        # import accounts.signals
+        import accounts.signals
