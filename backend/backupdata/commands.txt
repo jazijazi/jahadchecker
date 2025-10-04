@@ -1,0 +1,5 @@
+python manage.py loaddata backupdata/province_v1.json
+
+python manage.py loaddata backupdata/county_v1.json
+
+python manage.py loaddata backupdata/apis_v1.json
